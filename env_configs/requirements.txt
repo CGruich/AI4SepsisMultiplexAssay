@@ -1,0 +1,6 @@
+opencv-python
+numpy
+bayesian-optimization
+torch
+torchvision
+argparse

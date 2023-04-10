@@ -1,0 +1,24 @@
+name: venv_cg_gpu
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - anaconda
+  - defaults
+dependencies:
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.6
+  - python
+  - tqdm
+  - tensorboard
+  - numpy
+  - bayesian-optimization
+  - seaborn
+  - matplotlib
+  - pandas
+  - pip:
+      - opencv-python
+      - argparse
+      - ax-platform

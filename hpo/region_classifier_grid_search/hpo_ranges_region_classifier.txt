@@ -1,0 +1,6 @@
+batchSizeList = [64, 128, 256]
+lrList = [3e-4, 3e-5, 3e-6]
+dropoutList = [0.3, 0.5, 0.7]
+weightDecayBeta1List = [0.8, 0.9, 0.95]
+epsilonList = [1e-8, 0.1, 1.0]
+fcSize = [64, 128, 192, 256]
