@@ -7,7 +7,6 @@ from utils import helper_functions
 class CodeClassifier(nn.Module):
     def __init__(self, n_codes, region_shape=(1, 128, 128), model_load_path=None):
         super().__init__()
-        
         # CG: CPU or GPU, prioritizes GPU if available.
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -57,7 +56,8 @@ class CodeClassifier(nn.Module):
 
         layers = self.conv_layers + self.ff_layers
         self.model = nn.Sequential(*layers)
-
+        self.model.to(self.device)
+        
         if model_load_path is not None:
             self.load_weights(model_load_path)
 
@@ -65,9 +65,10 @@ class CodeClassifier(nn.Module):
         if type(x) != torch.Tensor:
             if type(x) != np.ndarray:
                 x = np.asarray(x).astype(np.float32)  # apparently faster to do this conversion first
-
             x = torch.as_tensor(x, dtype=torch.float32)
-        return self.model(x)
+        x = x.to(self.device)
+        forwardPass = self.model(x).to(self.device)
+        return forwardPass
 
     def classify_regions(self, regions):
         """

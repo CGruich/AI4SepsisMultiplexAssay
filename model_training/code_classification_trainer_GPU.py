@@ -28,6 +28,7 @@ class CodeClassifierTrainerGPU(object):
         
         n_codes = len(codes)
         self.model = CodeClassifier(n_codes)
+        self.model.to(self.device)
         if self.verbose:
             print("Model Loaded to GPU: " + str(next(self.model.parameters()).is_cuda))
         
@@ -42,7 +43,11 @@ class CodeClassifierTrainerGPU(object):
 
         self.model_save_path = model_save_path
         self.save_every_n = save_every_n
-
+        
+        # Tensorboard
+        self.log = True
+        self.writer = None
+        
         # Hyper-parameters.
         self.batch_size = batch_size
         self.n_epochs = 20000
@@ -83,6 +88,10 @@ class CodeClassifierTrainerGPU(object):
             batches = self.generate_batches(train_data)
             for batch in batches:
                 samples, labels = batch
+                # Moving the model to GPU is in-place, but moving the data is not.
+                samples = samples.to(self.device)
+                labels = labels.to(self.device)
+
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
 
@@ -173,14 +182,6 @@ class CodeClassifierTrainerGPU(object):
                 tf = transforms.RandomVerticalFlip()
                 samples = tf(samples)
 
-            # if np.random.uniform(0, 1) < transform_prob:
-            #     tf = transforms.RandomAutocontrast()
-            #     samples = tf(samples)
-            #
-            # if np.random.uniform(0, 1) < transform_prob:
-            #     tf = transforms.RandomAdjustSharpness(sharpness_factor=np.random.uniform(0, 10))
-            #     samples = tf(samples)
-
             factors = []
             for j in range(len(samples)):
                 max_factor = 65535./torch.max(samples[j])
@@ -207,8 +208,11 @@ class CodeClassifierTrainerGPU(object):
 
         # Generate a random augmented batch of validation data.
         # samples, labels = self.generate_batch(self.val_data)
-
+        
+        # Moving the model to GPU is in-place, but moving data is not.
         samples, labels = self.val_data
+        samples = samples.to(self.device)
+        labels = labels.to(self.device)
 
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
