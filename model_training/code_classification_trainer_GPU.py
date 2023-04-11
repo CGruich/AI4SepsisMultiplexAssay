@@ -38,6 +38,7 @@ class CodeClassifierTrainerGPU(object):
         # codes = ["1-1", "1-3", "1-12", "1-18", "2-10", "2-17"] # + ["invalid"]
 
         self.code_map = {code: idx for idx, code in enumerate(codes)}
+        print(f"Code Map Between Sample Filenames and Internal Code Integer Designation:\n{self.code_map}")
 
         self.model_save_path = model_save_path
         self.save_every_n = save_every_n
@@ -258,13 +259,15 @@ class CodeClassifierTrainerGPU(object):
         # For each image in the positive samples folder.
         for file_name in os.listdir(positive_sample_folder):
             if not file_name.endswith(".png"):
-              continue
-                      
+              continue       
             if "set" in file_name:
                 end = file_name.find("_")
                 code = file_name[:end].strip()
             else:
-                code = file_name[:file_name.find("(")].strip()
+                # CG: Legacy code for square particles
+                #code = file_name[:file_name.find("(")].strip()
+                # CG: For gear particles,
+                code = file_name[file_name.find("("):file_name.find("_")].strip()
             # Load region.
             region = cv2.imread(os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
             label = self.one_hot(self.code_map[code])
@@ -278,24 +281,6 @@ class CodeClassifierTrainerGPU(object):
         print("Label counts:")
         for key, value in label_counts.items():
             print("{} | {}".format(key, value))
-
-        # For each image in the negative samples folder.
-        # negative_samples = []
-        # for file_name in os.listdir(negative_sample_folder):
-        #     # Load region.
-        #     region = cv2.imread(os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
-        #     label = self.one_hot(self.code_map["invalid"])
-        #
-        #     # Append region and negative label to dataset.
-        #     negative_samples.append([region.reshape(1, *region.shape), label])
-        #
-        # idxs = [i for i in range(len(negative_samples))]
-        # np.random.shuffle(idxs)
-        # for i in range(n_negative):
-        #     data.append(negative_samples[i])
-        #
-        #
-        # print("Loaded {} negative training samples.".format(len(data) - n_positive))
 
         # Randomly shuffle all loaded samples.
         np.random.shuffle(data)

@@ -124,6 +124,7 @@ def find_mser_params(pipeline_inputs: dict = None):
                 print(opt.num_iterations)
                 opt.train(saveDir=saveDir)
                 print(f"\nMSER Parameters Saved To:\n{saveDir}\n")
+    # Legacy Code
     else:
         srcImg = "/home/cameron/Dropbox (University of Michigan)/DL_training/data/sandbox_CG/raw/Gear_particle/code1/1.tiff"
         referenceImg = "/home/cameron/Dropbox (University of Michigan)/DL_training/data/sandbox_CG/raw/Gear_particle/code1/1_ref.tiff"
@@ -307,6 +308,7 @@ def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/
                     print(row)
                     print(scores)
                     print("\n")
+    # Legacy code
     else:
         # If cross-validating for each hyperparameter trial,
         if crossVal:
@@ -453,6 +455,7 @@ def classify_regions(pipeline_inputs: dict = None, load_path=None, img_folder=No
                             region = region.reshape(new_shape)
                             cv2.imwrite(file_path, region)
                         sum_neg = sum_neg + len(negative_regions)
+    # Legacy code
     else:
         if not os.path.exists("data/classifier_training_samples/positive"):
             os.makedirs("data/classifier_training_samples/positive")
@@ -511,11 +514,19 @@ def classify_regions(pipeline_inputs: dict = None, load_path=None, img_folder=No
             sum_neg = sum_neg + len(negative_regions)
 
 
-def train_code_classifier():
-    codes = ["1", "2", "3"]
-    trainer = CodeClassifierTrainerGPU(codes, model_save_path="data/models/code")
-    trainer.load_data("data/classifier_training_samples")
-    trainer.train()
+def train_code_classifier(pipeline_inputs: dict = None):
+    # If we are using the control panel .ipynb pipeline,
+    if pipeline_inputs is not None:
+        codes = pipeline_inputs["code_list"]
+        trainer = CodeClassifierTrainerGPU(codes, model_save_path=pipeline_inputs["model_save_parent_directory"])
+        trainer.load_data(pipeline_inputs["sample_parent_directory"])
+        trainer.train()
+    # Legacy Code
+    else:    
+        codes = ["1", "2", "3"]
+        trainer = CodeClassifierTrainerGPU(codes, model_save_path="data/models/code")
+        trainer.load_data("data/classifier_training_samples")
+        trainer.train()
 
 
 def test_system(img_folder="/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)",
@@ -639,32 +650,49 @@ if __name__ == "__main__":
     
     if action == 'find_mser_params':
         if pipeline_inputs is None:
+            # Legacy Code
             find_mser_params()
         else:
             find_mser_params(pipeline_inputs=pipeline_inputs)
+    
     elif action == 'train_region_classifier':
         if pipeline_inputs is None:
+            # Legacy Code
             train_region_classifier()
         else:
             train_region_classifier(pipeline_inputs=pipeline_inputs)
+    
     elif action == 'hpo_region_classifier':
         if pipeline_inputs is None:
+            # Legacy Code
             grid_search_region_classifier()
         else:
             grid_search_region_classifier(pipeline_inputs=pipeline_inputs)
+    
     elif action == 'classify_regions':
         if pipeline_inputs is None:
+            # Legacy Code
             classify_regions(load_path=reg_path, img_folder=dir)
         else:
             classify_regions(pipeline_inputs=pipeline_inputs)
+    
     elif action == 'train_code_classifier':
-        train_code_classifier()
+        if pipeline_inputs is None:
+            # Legacy Code
+            train_code_classifier()
+        else:
+            train_code_classifier(pipeline_inputs=pipeline_inputs)
+    
+    # Legacy Code
     elif action == 'test_system':
         assert(reg_path is not None and code_path is not None)
         test_system(img_folder=dir, region_detector_path=reg_path,
                     code_classifier_path=code_path)
+    
+    # Legacy Code
     elif action == 'get_intensity':
         get_intensity(img_folder=dir,
                       region_detector_path=reg_path)
+    
     else:
       print("invalid action")

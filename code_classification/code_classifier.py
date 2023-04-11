@@ -7,6 +7,10 @@ from utils import helper_functions
 class CodeClassifier(nn.Module):
     def __init__(self, n_codes, region_shape=(1, 128, 128), model_load_path=None):
         super().__init__()
+        
+        # CG: CPU or GPU, prioritizes GPU if available.
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
         ch1 = 64
         ch2 = 32
         ch3 = 16
@@ -88,5 +92,5 @@ class CodeClassifier(nn.Module):
         return predicted_region_codes
 
     def load_weights(self, filepath):
-        self.load_state_dict(torch.load(filepath, map_location=torch.device('cpu')))
+        self.load_state_dict(torch.load(filepath, map_location=self.device))
         self.eval()
