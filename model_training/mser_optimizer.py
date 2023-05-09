@@ -160,26 +160,40 @@ class MSEROptimizer(object):
         mean_score = 0
 
         for img in self.images:
+            # Detect blobs
             blobs = self.detector.mser_detect_blobs(img)
+            # Extracting stable regions
             passed_contours = self.detector.extract_regions(blobs, img, return_passed_contours=True)
+            # Rectangle that best fits each region
             min_rotated_rects = [cv2.minAreaRect(blob) for blob in passed_contours]
+            # Count the number of regions
             n_regions += len(min_rotated_rects)
             dims = [rect[1] for rect in min_rotated_rects]
+            # Start of the Bayesian reward function
             if n_regions == 0:
+                # Forcing the Bayesian optimization to stay away from parameters that result in no regions
                 return -2e8
 
+            # Iterating through all the stable rectangle regions
             for rect in min_rotated_rects:
+                # Grab the center
                 center = np.asarray(rect[0]).reshape(1, 2)
+                # Check the distance between rectangle center and all the known rectangles
+                # i.e., find the closest rectangle to the current rectangle of focus
                 closest = min(np.linalg.norm(SET1_1_12_IMAGE1_LABELS - center, axis=1))
+                # As the region that is detected moves closer to a correct particle, the higher the score will go
                 mean_score -= closest
                 area = rect[1][0] * rect[1][1]
+                # Reject if outside minimum area
                 if area < self.min_area:
                     area_diff = area - self.min_area
+                # Reject if outside maximum area
                 elif area > self.max_area:
                     area_diff = self.max_area - area
                 else:
                     area_diff = 0
 
+                # If the rectangle falls inside the desired min_area max_area range, then subtract nothing because area_diff = 0
                 mean_score -= abs(area_diff)
 
             mean_score /= n_regions
