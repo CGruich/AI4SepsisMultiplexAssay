@@ -11,7 +11,13 @@ from tqdm import tqdm
 from datetime import datetime
 
 class RegionClassifierTrainerGPU(object):
-    def __init__(self, model_save_path="data/models/region", hpoTrial = None, verbose: bool = True, log: bool = True, timestamp: str = datetime.now().strftime("%m_%d_%y_%H:%M"), k: int = None):
+    def __init__(self, 
+                 model_save_path: str = "data/models/region", 
+                 hpoTrial = None, 
+                 verbose: bool = True, 
+                 log: bool = True, 
+                 timestamp: str = datetime.now().strftime("%m_%d_%y_%H:%M"), 
+                 k: int = None):
         # Printing verbosity
         self.verbose = verbose
 
@@ -47,7 +53,7 @@ class RegionClassifierTrainerGPU(object):
         self.loss_fn = nn.BCELoss()
         
         # Tensorboard
-        self.log = True
+        self.log = log
         self.writer = None
         
         # Hyperparameter Optimization
@@ -125,14 +131,13 @@ class RegionClassifierTrainerGPU(object):
         self.test_acc_for_best_val = np.inf
 
         # For each epoch
-        for epoch in range(self.n_epochs+1):
+        for epoch in range(self.n_epochs + 1):
             train_acc = 0
             train_loss = 0
 
             # Generate batches of augmented training samples.
             batches = self.generate_batches(train_data)
             for batch in tqdm(batches, desc="Epoch " + str(epoch) + ":", disable=not verbose):
-
                 samples, labels = batch
                 # Moving the model to GPU is in-place, but moving the data is not.
                 samples = samples.to(self.device)
@@ -150,7 +155,7 @@ class RegionClassifierTrainerGPU(object):
                 train_acc += self.compute_accuracy(labels, predictions)
                 train_loss += loss.detach().item()
 
-            # Report training loss, training accuracy, validation loss, and validation accuracy.
+            # Report training loss, training accuracy, validation loss, validation accuracy, and test loss/accuracy.
             train_loss /= len(batches)
             train_acc /= len(batches)
             val_loss, val_acc = self.validate()
@@ -174,6 +179,7 @@ class RegionClassifierTrainerGPU(object):
             self.losses["test_loss"].append(test_loss)
             self.losses["epoch"].append(epoch)
 
+            # CG: Legacy Code
             #print("EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
             #      epoch, train_loss, train_acc, val_loss, val_acc))
 
@@ -354,7 +360,11 @@ class RegionClassifierTrainerGPU(object):
         acc = 100*(n_samples - diff) / n_samples
         return acc.item()
 
-    def load_data(self, folder_path: str, datasetNP, train_idx = None, val_idx = None, test_dataset: np.ndarray = None):
+    def load_data(self, folder_path: str, 
+                  datasetNP, 
+                  train_idx = None, 
+                  val_idx = None, 
+                  test_dataset: np.ndarray = None):
         if self.hpoTrial is not None:
             # Ensuring a train/val/test split during hyperparameter optimization
             assert train_idx is not None
@@ -375,7 +385,7 @@ class RegionClassifierTrainerGPU(object):
 
             self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32), torch.as_tensor(v_labels, dtype=torch.float32))
 
-            # Setting up training dataset
+            # Setting up test dataset
             t_labels = []
             t_regions = []
             for region, label in test_dataset:
@@ -386,6 +396,7 @@ class RegionClassifierTrainerGPU(object):
 
             self.test_data = (torch.as_tensor(t_regions, dtype=torch.float32), torch.as_tensor(t_labels, dtype=torch.float32))
         
+        # Legacy Code
         else:
             '''
             Function to load all positive and negative samples given a folder. This assumes there are two folders inside the

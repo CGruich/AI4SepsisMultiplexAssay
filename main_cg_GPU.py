@@ -16,7 +16,8 @@ from pathlib import Path
 import json
 from datetime import datetime
 
-def load_data(folder_path, verbose=True):
+def load_data(folder_path, 
+              verbose=True):
     positive_sample_folder = os.path.join(folder_path, "positive")
     negative_sample_folder = os.path.join(folder_path, "negative")
     data = []
@@ -53,6 +54,38 @@ def load_data(folder_path, verbose=True):
         print("Loaded {} negative training samples.".format(len(data) - n_positive))
     
     # Return dataset
+    return data
+
+def load_code(code_folder_path,
+              verbose=True):
+    code_sample_folder = os.path.join(code_folder_path, "positive")
+    data = []
+    try:
+        codeDesignation = int(code_folder_path[-3:].strip("()"))
+    except:
+        print("\n\nFAILURE OBTAINING DESIGNATED CODE LABEL FROM THE PARENT FOLDER PATH.\nThe parent folder name may not have been correctly labelled.")
+
+    # For each image in the code's positive samples folder,
+    for file_name in os.listdir(code_sample_folder):
+        if not file_name.endswith(".png"):
+            continue
+
+        # Load region.
+        region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+        try:
+            label = int(file_name[0:2].strip("()"))
+            assert label == codeDesignation
+        except:
+            print("\n\nFAILURE OBTAINING TARGET LABEL FROM SAMPLE FILENAMES.\nThe sample filenames may not have been correctly labelled.")
+        # Append region and negative label to dataset.
+        data.append([region.reshape(1, *region.shape), label])
+    
+    n_positive = len(data)
+
+    if verbose:
+        print("Loaded {} positive training samples".format(n_positive))
+    
+    # Return dataset for one code
     return data
 
 # Tests if an arbitrary string can be converted into an integer...
@@ -148,7 +181,16 @@ def find_mser_params(pipeline_inputs: dict = None):
         opt.train()
 
 
-def train_region_classifier(pipeline_inputs: dict = None, load_data_path="data/classifier_training_samples", model_save_path="data/models/region", crossVal=False, k=5, hpoTrial=None, randomState=100, verbose=True, log=True, timestamp: str = None):
+def train_region_classifier(pipeline_inputs: dict = None, 
+                            load_data_path="data/classifier_training_samples", 
+                            model_save_path="data/models/region", 
+                            crossVal=False, 
+                            k=5, 
+                            hpoTrial=None, 
+                            randomState=100, 
+                            verbose=True, 
+                            log=True, 
+                            timestamp: str = None):
     if timestamp is None:
         timestamp = datetime.now().strftime("%m_%d_%y_%H:%M")
     
@@ -172,7 +214,6 @@ def train_region_classifier(pipeline_inputs: dict = None, load_data_path="data/c
     # CG: Stratified k-Fold cross-validation
     if crossVal:
         cvColumns = ["cv" + str(fold) for fold in range(1, k + 1)]
-        crossValDF = pd.DataFrame(columns=cvColumns)
         splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=randomState)
         
         dataset_idx = np.arange(len(trainDataset))
@@ -372,7 +413,9 @@ def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/
                     print(scores)
                     print("\n")
 
-def classify_regions(pipeline_inputs: dict = None, load_path=None, img_folder=None):
+def classify_regions(pipeline_inputs: dict = None, 
+                     load_path=None, 
+                     img_folder=None):
     # If we are using the control panel .ipynb pipeline,
     if pipeline_inputs is not None:
         # Get the parent directory of raw images for all codes
@@ -514,13 +557,83 @@ def classify_regions(pipeline_inputs: dict = None, load_path=None, img_folder=No
             sum_neg = sum_neg + len(negative_regions)
 
 
-def train_code_classifier(pipeline_inputs: dict = None):
+def train_code_classifier(pipeline_inputs: dict = None,
+                          crossVal=False,
+                          k=5,
+                          randomState=100,
+                          verbose=True,
+                          log=True,
+                          timestamp: str = None):
+    if timestamp is None:
+        timestamp = datetime.now().strftime("%m_%d_%y_%H:%M")
+
     # If we are using the control panel .ipynb pipeline,
     if pipeline_inputs is not None:
         codes = pipeline_inputs["code_list"]
         trainer = CodeClassifierTrainerGPU(codes, model_save_path=pipeline_inputs["model_save_parent_directory"])
-        trainer.load_data(pipeline_inputs["sample_parent_directory"])
-        trainer.train()
+        codeDataComposite = []
+        for code in codes:
+            codePath = osp.join(pipeline_inputs["sample_parent_directory"], "code " + code)
+            codeData = load_code(code_folder_path=codePath)
+            codeDataComposite = codeDataComposite + codeData
+        # Total composite dataset samples
+        print("Total Composite Dataset Training Samples:\n{}".format(len(codeDataComposite)))
+
+        # Based on the format of the return result of .load_code(),
+        # Extract all the targets of the training samples
+        targets = np.array(list(zip(*codeDataComposite))[-1])
+        # All the samples
+        dataset = np.asarray(codeDataComposite, dtype=object)
+
+        # Do a straified train/test split of all samples into training and test datasets
+        # Returns the actual samples, not the indices of the samples.
+        trainDataset, testDataset = train_test_split(dataset, test_size=0.20, stratify=targets)
+        trainTargets = np.asarray(list(zip(*trainDataset))[-1])
+        testTargets = np.asarray(list(zip(*testDataset))[-1])
+
+        # CG: Stratified k-Fold cross-validation
+        if pipeline_inputs["strat_kfold"]["activate"]:
+            splits = StratifiedKFold(n_splits=pipeline_inputs["strat_kfold"]["num_folds"], 
+                                     shuffle=True, 
+                                     random_state=pipeline_inputs["strat_kfold"]["random_state"])
+            
+            dataset_idx = np.arange(len(trainDataset))
+            crossValScores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
+            foldInd = 1
+            for fold, (train_idx, val_idx) in enumerate(splits.split(dataset_idx, y=trainTargets)):
+                if verbose:
+                    print('\n\nFold {}'.format(fold + 1))
+                trainer = CodeClassifierTrainerGPU(codes=codes,
+                                                   model_save_path=pipeline_inputs["model_save_parent_directory"], 
+                                                   verbose=True, 
+                                                   log=log, 
+                                                   timestamp=timestamp, 
+                                                   k=foldInd)
+                trainer.load_data(pipeline_inputs["sample_parent_directory"], 
+                                  dataset,
+                                  targets, 
+                                  train_idx, 
+                                  val_idx, 
+                                  test_dataset=testDataset,
+                                  test_targets = testTargets)
+                crossValScores = trainer.train(crossVal=pipeline_inputs["strat_kfold"]["activate"], 
+                                               crossValScores=crossValScores)
+                # Keep track of what k-fold we are on for book-keeping
+                foldInd = foldInd + 1
+            
+            if verbose:
+                print("\nTRAINING COMPLETE.\nCross-Validation Dictionary:")
+                print(crossValScores)
+                for key, value in crossValScores.items():
+                    print("Avg. " + str(key) + ": " + str(np.array(value).mean()))
+            return crossValScores
+        #trainer.load_data(pipeline_inputs["sample_parent_directory"])
+        #trainer.train()
+    
+    # Train a new classifier with the data located under
+    # data/classifier_training_samples/positive and
+    # data/classifier_training_samples/negative
+
     # Legacy Code
     else:    
         codes = ["1", "2", "3"]
@@ -528,7 +641,47 @@ def train_code_classifier(pipeline_inputs: dict = None):
         trainer.load_data("data/classifier_training_samples")
         trainer.train()
 
+    '''# Train a new classifier with the data located under
+    # data/classifier_training_samples/positive and
+    # data/classifier_training_samples/negative
+    
+    # Returns list of lists
+    dataList = load_data(load_data_path, verbose=verbose)
+    # Based on the format of the return result of .load_data(),
+    # Extract all the targets of the training samples
+    targets = np.array(list(zip(*dataList))[-1])
+    # All the samples
+    dataset = np.asarray(load_data(load_data_path, verbose=verbose), dtype=object)
 
+    # Do a stratified train/test split of all samples into training and test datasets
+    # Returns the actual samples, not the indices of the samples.
+    trainDataset, testDataset = train_test_split(dataset, test_size=0.20, stratify=targets)
+    trainTargets = np.asarray(list(zip(*trainDataset))[-1])
+    
+    # CG: Stratified k-Fold cross-validation
+    if crossVal:
+        cvColumns = ["cv" + str(fold) for fold in range(1, k + 1)]
+        crossValDF = pd.DataFrame(columns=cvColumns)
+        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=randomState)
+        
+        dataset_idx = np.arange(len(trainDataset))
+        crossValScores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
+        foldInd = 1
+        for fold, (train_idx, val_idx) in enumerate(splits.split(dataset_idx, y=trainTargets)):
+            if verbose:
+                print('\n\nFold {}'.format(fold + 1))
+            trainer = RegionClassifierTrainerGPU(model_save_path=model_save_path, hpoTrial=hpoTrial, verbose=verbose, log=log, timestamp=timestamp, k=foldInd)
+            trainer.load_data(load_data_path, dataset, train_idx, val_idx, test_dataset=testDataset)
+            crossValScores = trainer.train(crossVal=crossVal, crossValScores=crossValScores)
+            # Keep track of what k-fold we are on for book-keeping
+            foldInd = foldInd + 1
+        
+        if verbose:
+            print("\nTRAINING COMPLETE.\nCross-Validation Dictionary:")
+            print(crossValScores)
+            for key, value in crossValScores.items():
+                print("Avg. " + str(key) + ": " + str(np.array(value).mean()))
+        return crossValScores '''
 def test_system(img_folder="/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)",
                 region_detector_path="data/best/best_region_classifier.pt",
                 code_classifier_path="data/best/best_code_classifier.pt"):

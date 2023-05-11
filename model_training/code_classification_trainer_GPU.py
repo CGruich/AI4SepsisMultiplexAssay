@@ -8,16 +8,17 @@ import torch.optim as optim
 from torchvision import transforms
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+from datetime import datetime
 
 class CodeClassifierTrainerGPU(object):
-    def __init__(self, codes=["1-1", "1-2", "1-3", "1-4", "1-5", "1-6", "1-7", "1-8", "1-9", "1-10"], 
+    def __init__(self, codes=None, 
                  model_save_path="data/models/code_classifier",
-                 hpoTrial=None,
-                 save_every_n=10,
-                 batch_size=256,
-                 verbose=True,
-                 log=True
-                 ):
+                 save_every_n: int = 10,
+                 batch_size: int = 256,
+                 verbose: bool = True,
+                 log: bool = True,
+                 timestamp: str = datetime.now().strftime("%m_%d_%y_%H:%M"),
+                 k: int = None):
         
         # CG: CPU or GPU, prioritizes GPU if available.
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -25,7 +26,7 @@ class CodeClassifierTrainerGPU(object):
         self.verbose = verbose
         if self.verbose:
             print("CUDA Availability: " + str(torch.cuda.is_available()))
-        
+
         n_codes = len(codes)
         self.model = CodeClassifier(n_codes)
         self.model.to(self.device)
@@ -43,10 +44,8 @@ class CodeClassifierTrainerGPU(object):
 
         self.model_save_path = model_save_path
         self.save_every_n = save_every_n
-        
-        # Tensorboard
-        self.log = True
-        self.writer = None
+
+        self.log_timestamp = timestamp
         
         # Hyper-parameters.
         self.batch_size = batch_size
@@ -55,13 +54,30 @@ class CodeClassifierTrainerGPU(object):
         self.val_split = 0.2
         self.max_transform_sequence = 10
         self.best_val_acc = 0
-        self.losses = {"epoch": [], "ta": [], "va": [], "tl": [], "vl": []}
+        self.losses = {"epoch": [], "ta": [], "va": [], "test_acc": [], "tl": [], "vl": [], "test_loss": []}
+        self.best_val_acc = 0
         self.patience = 5
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        self.loss_fn = nn.BCELoss()
+        # Tensorboard
+        self.log = log
+        self.writer = None
 
-    def train(self):
+        # How many epochs to wait before early-stopping is allowed.
+        self.warmup = 10
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        #self.loss_fn = nn.BCELoss()
+        self.loss_fn = nn.CrossEntropyLoss()
+
+        if self.log:
+            self.writer = SummaryWriter(os.path.join(self.model_save_path, self.log_timestamp, "logs"))
+
+    def train(self, 
+              crossVal=False, 
+              crossValScores = {"Val_Loss": [], 
+                                "Val_Acc": [], 
+                                "Test_Loss": [], 
+                                "Test_Acc": []}):
         """
         Function to train a classifier on hologram regions.
         :return: None.
@@ -76,8 +92,13 @@ class CodeClassifierTrainerGPU(object):
         model = self.model
         train_data = self.train_data
         patience = self.patience
-
+        warmup = self.warmup
+        
+        writer = self.writer
+        verbose = self.verbose
         best_val_loss = np.inf
+        self.test_loss_for_best_val = np.inf
+        self.test_acc_for_best_val = np.inf
 
         # For each epoch
         for epoch in range(self.n_epochs + 1):
@@ -86,7 +107,7 @@ class CodeClassifierTrainerGPU(object):
 
             # Generate batches of augmented training samples.
             batches = self.generate_batches(train_data)
-            for batch in batches:
+            for batch in tqdm(batches, desc="Epoch " + str(epoch) + ":", disable=not verbose):
                 samples, labels = batch
                 # Moving the model to GPU is in-place, but moving the data is not.
                 samples = samples.to(self.device)
@@ -94,46 +115,91 @@ class CodeClassifierTrainerGPU(object):
 
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
+                predictedLabels = torch.tensor((torch.argmax(predictions, dim=1) + 1).float(), requires_grad=True)
+                #print("PREDICTIONS")
+                #print(predictions)
+                #print(predictions.dtype)
+                #print("PREDICTED LABELS")
+                #print(predictedLabels)
+                #print(predictedLabels.dtype)
+                #print("LABELS")
+                #print(labels)
+                #print(labels.dtype)
 
                 # Compute the loss and take one step along the gradient.
                 optimizer.zero_grad()
-                loss = loss_fn(predictions, labels)
+                loss = loss_fn(predictedLabels, labels)
+                print("LOSS")
+                print(loss)
                 loss.backward()
                 optimizer.step()
 
                 train_acc += self.compute_accuracy(labels, predictions)
                 train_loss += loss.detach().item()
 
-            # Report training loss, training accuracy, validation loss, and validation accuracy.
+            # Report training loss, training accuracy, validation loss, validation accuracy, and test loss/accuracy.
             train_loss /= len(batches)
             train_acc /= len(batches)
             val_loss, val_acc = self.validate()
+            test_loss, test_acc = self.test()
+
+            writer.add_scalars("Loss", {"Train_Loss":train_loss, 
+                                        "Val_Loss":val_loss, 
+                                        "Test_Loss":test_loss}, epoch)
+            writer.add_scalars("Accuracy", {"Train_Acc":train_acc, 
+                                            "Val_Acc":val_acc, 
+                                            "Test_Acc":test_acc}, epoch)
+            writer.add_scalar("Train_Loss", train_loss, epoch)
+            writer.add_scalar("Train_Acc", train_acc, epoch)
+            writer.add_scalar("Val_Loss", val_loss, epoch)
+            writer.add_scalar("Val_Acc", val_acc, epoch)
+            writer.add_scalar("Test_Loss", test_loss, epoch)
+            writer.add_scalar("Test_Acc", test_acc, epoch)
+            writer.add_scalar("Patience (Early Stopping)", patience, epoch)
 
             self.losses["ta"].append(train_acc)
             self.losses["va"].append(val_acc)
+            self.losses["test_acc"].append(test_acc)
             self.losses["tl"].append(train_loss)
             self.losses["vl"].append(val_loss)
+            self.losses["test_loss"].append(test_loss)
             self.losses["epoch"].append(epoch)
 
-            print("EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
-                epoch, train_loss, train_acc, val_loss, val_acc))
+            # CG: Legacy Code
+            #print("EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
+            #    epoch, train_loss, train_acc, val_loss, val_acc))
 
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:
-                print("NEW BEST ACCURACY", val_acc, epoch)
+                if verbose:
+                    print("NEW BEST VAL. ACCURACY", val_acc, epoch)
                 self.best_val_acc = val_acc
+                self.test_acc_for_best_val = test_acc
                 self.save_model(epoch)
-            
+
             if val_loss > best_val_loss:
-                patience -= 1
+                if epoch > warmup:
+                    patience -= 1
             else:
                 best_val_loss = val_loss
+                self.test_loss_for_best_val = test_loss
                 patience = self.patience
-            if patience == 0 and epoch > 200:
+            if patience == 0 and epoch > warmup:
                 break
 
             if epoch % self.save_every_n == 0:
                 self.save_model(epoch)
+        # Save changes to hard drive and close tensorboard writer in memory.
+        writer.flush()
+        writer.close()
+
+        if crossVal:
+            crossValScores["Val_Loss"].append(best_val_loss)
+            crossValScores["Val_Acc"].append(self.best_val_acc)
+            crossValScores["Test_Loss"].append(self.test_loss_for_best_val)
+            crossValScores["Test_Acc"].append(self.test_acc_for_best_val)
+            return crossValScores
+
 
     def generate_batches(self, data):
         """
@@ -173,7 +239,6 @@ class CodeClassifierTrainerGPU(object):
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
                 samples = tf(samples)
-
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomHorizontalFlip()
                 samples = tf(samples)
@@ -208,15 +273,17 @@ class CodeClassifierTrainerGPU(object):
 
         # Generate a random augmented batch of validation data.
         # samples, labels = self.generate_batch(self.val_data)
-        
+
         # Moving the model to GPU is in-place, but moving data is not.
         samples, labels = self.val_data
         samples = samples.to(self.device)
+        samples = torch.unsqueeze(samples, dim=1)
         labels = labels.to(self.device)
 
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
-        loss = self.loss_fn(predictions, labels).item()
+        predictedLabels = (torch.argmax(predictions, dim=1) + 1).float()
+        loss = self.loss_fn(predictedLabels, labels).item()
         acc = self.compute_accuracy(labels, predictions)
 
         # Set the model back to training mode.
@@ -225,6 +292,37 @@ class CodeClassifierTrainerGPU(object):
         # Return the computed loss and accuracy values.
         return loss, acc
 
+    @torch.no_grad()
+    def test(self):
+        """
+        Function to compute the test loss and accuracy on a pre-defined test dataset data.
+        :return: Computed loss and accuracy.
+        """
+
+        # Set the model to evaluation mode.
+        self.model.eval()
+
+        # Generate a random augmented batch of validation data.
+        # samples, labels = self.generate_batch(self.val_data)
+        
+        # Moving the model to GPU is in-place, but moving data is not.
+        samples, labels = self.test_data
+        samples = samples.to(self.device)
+        samples = torch.unsqueeze(samples, dim=1)
+        labels = labels.to(self.device)
+
+        # Compute loss and accuracy of model on the generated batch.
+        predictions = self.model.forward(samples)
+        predictedLabels = (torch.argmax(predictions, dim=1) + 1).float()
+        loss = self.loss_fn(predictedLabels, labels).item()
+        acc = self.compute_accuracy(labels, predictions)
+
+        # Set the model back to training mode.
+        self.model.train()
+
+        # Return the computed loss and accuracy values.
+        return loss, acc
+    
     @torch.no_grad()
     def compute_accuracy(self, labels, predictions):
         """
@@ -243,7 +341,13 @@ class CodeClassifierTrainerGPU(object):
         acc = 100*n_correct / n_samples
         return acc.item()
 
-    def load_data(self, folder_path):
+    def load_data(self, folder_path: str, 
+                  datasetNP = None,
+                  targetsNP = None, 
+                  train_idx = None,
+                  val_idx = None, 
+                  test_dataset: np.ndarray = None,
+                  test_targets: np.ndarray = None):
         """
         Function to load all positive and negative samples given a folder. This assumes there are two folders inside the
         specified folder, such that the file paths `folder_path/positive` and `folder_path/negative` exist. Positive
@@ -253,24 +357,55 @@ class CodeClassifierTrainerGPU(object):
         :param folder_path: Folder to load from.
         :return: None
         """
+        # Ensuring a train/val/test split
+        assert train_idx is not None
+        assert val_idx is not None
+        assert test_dataset is not None
 
-        positive_sample_folder = os.path.join(folder_path, "positive")
-        negative_sample_folder = os.path.join(folder_path, "negative")
-        n_negative = 0
+        self.train_data = np.take(datasetNP, train_idx, axis=0)
+        train_targets = np.take(targetsNP, train_idx, axis=0)
+        val_data = np.take(datasetNP, val_idx, axis=0)
+        val_targets = np.take(targetsNP, val_idx, axis=0)
+        
+        # Setting up validation dataset
+        v_labels = []
+        v_regions = []
+        for region, label in zip(val_data, val_targets):
+            v_labels.append(label)
+            v_regions.append(np.array(region[0][0], dtype=np.float32))
+
+        v_labels = np.array(v_labels, dtype=np.int32)
+        v_regions = np.array(v_regions, dtype=np.int32)
+
+        self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32), torch.as_tensor(v_labels, dtype=torch.float32))
+
+        # Setting up test dataset
+        t_labels = []
+        t_regions = []
+        for region, label in zip(test_dataset, train_targets):
+            t_labels.append(label)
+            t_regions.append(np.array(region[0][0], dtype=np.float32))
+        t_labels = np.array(t_labels, dtype=np.int32)
+        t_regions = np.array(t_regions, dtype=np.int32)
+
+        self.test_data = (torch.as_tensor(t_regions, dtype=torch.float32), torch.as_tensor(t_labels, dtype=torch.float32))
+
+        # Legacy Code
+        '''positive_sample_folder = os.path.join(folder_path, "positive")
         data = []
         label_counts = {key:0 for key in self.code_map.keys()}
 
         # For each image in the positive samples folder.
         for file_name in os.listdir(positive_sample_folder):
             if not file_name.endswith(".png"):
-              continue       
+                continue       
             if "set" in file_name:
                 end = file_name.find("_")
                 code = file_name[:end].strip()
             else:
                 # CG: Legacy code for square particles
                 #code = file_name[:file_name.find("(")].strip()
-                # CG: For gear particles,
+                # CG: For gear particles, this is just a new filename search criteria for how the samples are labeled,
                 code = file_name[file_name.find("("):file_name.find("_")].strip()
             # Load region.
             region = cv2.imread(os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
@@ -299,7 +434,7 @@ class CodeClassifierTrainerGPU(object):
         for region, label in val_data:
             v_labels.append(label)
             v_regions.append(region)
-        self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32), torch.as_tensor(v_labels, dtype=torch.float32))
+        self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32), torch.as_tensor(v_labels, dtype=torch.float32))'''
 
     def save_model(self, epoch):
         """
@@ -320,9 +455,9 @@ class CodeClassifierTrainerGPU(object):
         torch.save(self.model.state_dict(), model_save_file)
         with open(train_csv_path, 'w') as f:
             ls = self.losses
-            f.write("Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n")
+            f.write("Epoch,Training Accuracy,Validation Accuracy,Test Accuracy,Training Loss,Validation Loss,Test Loss\n")
             for i in range(epoch):
-                f.write("{},{},{},{},{}\n".format(ls["epoch"][i], ls["ta"][i], ls["va"][i], ls["tl"][i], ls["vl"][i]))
+                f.write("{},{},{},{},{},{},{}\n".format(ls["epoch"][i], ls["ta"][i], ls["va"][i], ls["test_acc"][i], ls["tl"][i], ls["vl"][i], ls["test_loss"][i]))
 
     def one_hot(self, value):
         arr = [0 for _ in range(self.num_codes)]
