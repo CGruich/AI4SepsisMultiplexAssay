@@ -214,16 +214,29 @@ def train_region_classifier(pipeline_inputs: dict = None,
     # CG: Stratified k-Fold cross-validation
     if crossVal:
         cvColumns = ["cv" + str(fold) for fold in range(1, k + 1)]
+        # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
         splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=randomState)
         
-        dataset_idx = np.arange(len(trainDataset))
+        trainDataset_idx = np.arange(len(trainDataset))
         crossValScores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
         foldInd = 1
-        for fold, (train_idx, val_idx) in enumerate(splits.split(dataset_idx, y=trainTargets)):
+        # For each fold, define training data indices and validation data indices from the input training dataset
+        for fold, (train_idx, val_idx) in enumerate(splits.split(trainDataset_idx, y=trainTargets)):
             if verbose:
                 print('\n\nFold {}'.format(fold + 1))
-            trainer = RegionClassifierTrainerGPU(model_save_path=model_save_path, hpoTrial=hpoTrial, verbose=verbose, log=log, timestamp=timestamp, k=foldInd)
-            trainer.load_data(load_data_path, dataset, train_idx, val_idx, test_dataset=testDataset)
+            # Define a region classifier
+            trainer = RegionClassifierTrainerGPU(model_save_path=model_save_path, 
+                                                 hpoTrial=hpoTrial, 
+                                                 verbose=verbose, 
+                                                 log=log, 
+                                                 timestamp=timestamp, 
+                                                 k=foldInd)
+            trainer.load_data(load_data_path, 
+                              trainDataset, 
+                              train_idx, 
+                              val_idx, 
+                              test_dataset=testDataset)
+            # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
             crossValScores = trainer.train(crossVal=crossVal, crossValScores=crossValScores)
             # Keep track of what k-fold we are on for book-keeping
             foldInd = foldInd + 1
@@ -231,6 +244,7 @@ def train_region_classifier(pipeline_inputs: dict = None,
         if verbose:
             print("\nTRAINING COMPLETE.\nCross-Validation Dictionary:")
             print(crossValScores)
+            # Average cross-validation scores
             for key, value in crossValScores.items():
                 print("Avg. " + str(key) + ": " + str(np.array(value).mean()))
         return crossValScores 
@@ -588,39 +602,52 @@ def train_code_classifier(pipeline_inputs: dict = None,
         # Do a straified train/test split of all samples into training and test datasets
         # Returns the actual samples, not the indices of the samples.
         trainDataset, testDataset = train_test_split(dataset, test_size=0.20, stratify=targets)
+        # Train targets
         trainTargets = np.asarray(list(zip(*trainDataset))[-1])
+        # Test targets
         testTargets = np.asarray(list(zip(*testDataset))[-1])
 
         # CG: Stratified k-Fold cross-validation
+        # If doing strat. k-fold cross-val.,
         if pipeline_inputs["strat_kfold"]["activate"]:
+            # Define a class to do the stratified splitting into folds
             splits = StratifiedKFold(n_splits=pipeline_inputs["strat_kfold"]["num_folds"], 
                                      shuffle=True, 
                                      random_state=pipeline_inputs["strat_kfold"]["random_state"])
             
-            dataset_idx = np.arange(len(trainDataset))
+            # Get the indices of the training dataset
+            trainDataset_idx = np.arange(len(trainDataset))
+            # Dictionary to hold cross-validation scores
             crossValScores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
             foldInd = 1
-            for fold, (train_idx, val_idx) in enumerate(splits.split(dataset_idx, y=trainTargets)):
+            # For each fold in the training dataset, define a new training dataset and validation dataset based off the training targets
+            for fold, (train_idx, val_idx) in enumerate(splits.split(trainDataset_idx, y=trainTargets)):
                 if verbose:
                     print('\n\nFold {}'.format(fold + 1))
+                # Define a code classifier
                 trainer = CodeClassifierTrainerGPU(codes=codes,
                                                    model_save_path=pipeline_inputs["model_save_parent_directory"], 
                                                    verbose=True, 
                                                    log=log, 
                                                    timestamp=timestamp, 
                                                    k=foldInd)
+                # Load code classifier training data and validation data
+                # Validation data is taken from the training dataset and targets (trainDataset, trainTargets)
+                # Test dataset and test targets are inputted separately
                 trainer.load_data(pipeline_inputs["sample_parent_directory"], 
-                                  dataset,
-                                  targets, 
+                                  trainDataset,
+                                  trainTargets, 
                                   train_idx, 
                                   val_idx, 
                                   test_dataset=testDataset,
-                                  test_targets = testTargets)
+                                  test_targets=testTargets)
+                # Train
                 crossValScores = trainer.train(crossVal=pipeline_inputs["strat_kfold"]["activate"], 
                                                crossValScores=crossValScores)
                 # Keep track of what k-fold we are on for book-keeping
                 foldInd = foldInd + 1
             
+            # Print out the average cross-validation results
             if verbose:
                 print("\nTRAINING COMPLETE.\nCross-Validation Dictionary:")
                 print(crossValScores)
