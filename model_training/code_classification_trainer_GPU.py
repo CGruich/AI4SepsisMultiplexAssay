@@ -37,7 +37,6 @@ class CodeClassifierTrainerGPU(object):
         self.val_data = None
 
         self.num_codes = n_codes
-        # codes = ["1-1", "1-3", "1-12", "1-18", "2-10", "2-17"] # + ["invalid"]
 
         self.code_map = {code: idx for idx, code in enumerate(codes)}
         print(f"Code Map Between Sample Filenames and Internal Code Integer Designation:\n{self.code_map}")
@@ -56,17 +55,16 @@ class CodeClassifierTrainerGPU(object):
         self.best_val_acc = 0
         self.losses = {"epoch": [], "ta": [], "va": [], "test_acc": [], "tl": [], "vl": [], "test_loss": []}
         self.best_val_acc = 0
-        self.patience = 5
+        self.patience = 20
 
         # Tensorboard
         self.log = log
         self.writer = None
 
         # How many epochs to wait before early-stopping is allowed.
-        self.warmup = 10
+        self.warmup = 50
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        #self.loss_fn = nn.BCELoss()
         self.loss_fn = nn.CrossEntropyLoss()
 
         if self.log:
@@ -108,6 +106,8 @@ class CodeClassifierTrainerGPU(object):
             # Generate batches of augmented training samples.
             batches = self.generate_batches(train_data)
             for batch in tqdm(batches, desc="Epoch " + str(epoch) + ":", disable=not verbose):
+                #print("TRAIN BATCH")
+                #print(batch)
                 samples, labels = batch
                 # Moving the model to GPU is in-place, but moving the data is not.
                 samples = samples.to(self.device)
@@ -116,21 +116,11 @@ class CodeClassifierTrainerGPU(object):
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
                 predictedLabels = torch.tensor((torch.argmax(predictions, dim=1) + 1).float(), requires_grad=True)
-                #print("PREDICTIONS")
-                #print(predictions)
-                #print(predictions.dtype)
-                #print("PREDICTED LABELS")
-                #print(predictedLabels)
-                #print(predictedLabels.dtype)
-                #print("LABELS")
-                #print(labels)
-                #print(labels.dtype)
 
                 # Compute the loss and take one step along the gradient.
                 optimizer.zero_grad()
                 loss = loss_fn(predictedLabels, labels)
-                print("LOSS")
-                print(loss)
+
                 loss.backward()
                 optimizer.step()
 
@@ -219,8 +209,12 @@ class CodeClassifierTrainerGPU(object):
         bs = self.batch_size
         for i in range(len(data) // bs):
             # Choose our random batch.
-            idxs = indices[i * bs:i * bs + bs]
+            idxs = indices[i*bs:i*bs+bs]
             batch = data[idxs]
+
+            # CG: Enable if not work
+            #print("BATCH TO AUGMENT")
+            #print(batch)
 
             samples = []
             labels = []
@@ -230,15 +224,20 @@ class CodeClassifierTrainerGPU(object):
                 # Append the augmented sample to the batch.
                 samples.append(training_sample[0])
 
-                # Append the appropriate binary label for this sample to the batch.
+                # Append the appropriate label for this sample to the batch.
                 label = training_sample[1]
                 labels.append(label)
 
             # Cast batch to tensor for PyTorch.
-            samples = torch.as_tensor(samples, dtype=torch.float32)
+            samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.GaussianBlur(kernel_size=np.random.choice([2*i+1 for i in range(10)]))
+                samples = tf(samples)
+
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
                 samples = tf(samples)
+
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomHorizontalFlip()
                 samples = tf(samples)
@@ -247,15 +246,39 @@ class CodeClassifierTrainerGPU(object):
                 tf = transforms.RandomVerticalFlip()
                 samples = tf(samples)
 
-            factors = []
-            for j in range(len(samples)):
-                max_factor = 65535./torch.max(samples[j])
-                min_factor = 0.5
-                factors.append(np.random.uniform(min_factor, max_factor))
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.RandomAutocontrast()
+                samples = tf(samples)
 
-            samples *= np.asarray(factors).astype(np.float32).reshape(-1, 1, 1, 1)
-            labels = torch.as_tensor(labels, dtype=torch.float32)
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.RandomAdjustSharpness(sharpness_factor=np.random.uniform(0, 10))
+                samples = tf(samples)
 
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.RandomInvert()
+                samples = tf(samples)
+
+            # Legacy
+            #factors = []
+            
+            #for j in range(len(samples)):
+            #    max_factor = 65535./torch.max(samples[j])
+            #    min_factor = 0.5
+            #    factors.append(np.random.uniform(min_factor, max_factor))
+
+            # Inconsistent torch and numpy calls
+            #samples *= np.asarray(factors).astype(np.float32).reshape(-1, 1, 1, 1)
+            
+            #samples *= torch.tensor(factors).reshape(-1, 1, 1, 1)
+            
+            #labels = torch.as_tensor(labels, dtype=torch.float32)
+            labels = torch.as_tensor(np.array(labels, dtype=np.int32), dtype=torch.float32)
+
+            # CG: Enable if not work
+            #print("Augmented samples")
+            #print(samples)
+            #print("Augmented Labels")
+            #print(labels)
             batches.append((samples, labels))
 
         # Return augmented batch.
@@ -332,18 +355,25 @@ class CodeClassifierTrainerGPU(object):
         :return: Computed accuracy.
         """
 
-        predicted_labels = predictions.argmax(dim=-1)
-        known_labels = labels.argmax(dim=-1)
+        predicted_labels = predictions.argmax(dim=-1) + 1
+        #print("predicted_labels")
+        #print(predicted_labels)
+        #print("labels")
+        #print(labels)
+
         n_samples = labels.shape[0]
 
-        n_correct = torch.where(predicted_labels == known_labels, 1, 0).sum()
+        n_correct = torch.where(predicted_labels == labels, 1, 0).sum()
 
         acc = 100*n_correct / n_samples
+        #print("acc")
+        #print(acc)
+
         return acc.item()
 
     def load_data(self, folder_path: str, 
-                  datasetNP = None,
-                  targetsNP = None, 
+                  trainDatasetNP = None,
+                  trainTargetsNP = None, 
                   train_idx = None,
                   val_idx = None, 
                   test_dataset: np.ndarray = None,
@@ -362,10 +392,10 @@ class CodeClassifierTrainerGPU(object):
         assert val_idx is not None
         assert test_dataset is not None
 
-        self.train_data = np.take(datasetNP, train_idx, axis=0)
-        train_targets = np.take(targetsNP, train_idx, axis=0)
-        val_data = np.take(datasetNP, val_idx, axis=0)
-        val_targets = np.take(targetsNP, val_idx, axis=0)
+        self.train_data = np.take(trainDatasetNP, train_idx, axis=0)
+        train_targets = np.take(trainTargetsNP, train_idx, axis=0)
+        val_data = np.take(trainDatasetNP, val_idx, axis=0)
+        val_targets = np.take(trainTargetsNP, val_idx, axis=0)
         
         # Setting up validation dataset
         v_labels = []
@@ -389,6 +419,13 @@ class CodeClassifierTrainerGPU(object):
         t_regions = np.array(t_regions, dtype=np.int32)
 
         self.test_data = (torch.as_tensor(t_regions, dtype=torch.float32), torch.as_tensor(t_labels, dtype=torch.float32))
+
+        print("self.train_data")
+        print(self.train_data)
+        print("self.val_data")
+        print(self.val_data)
+        print("self.test_data")
+        print(self.test_data)
 
         # Legacy Code
         '''positive_sample_folder = os.path.join(folder_path, "positive")
