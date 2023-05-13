@@ -485,8 +485,7 @@ class CodeClassifierTrainerGPU(object):
                   trainTargetsNP = None, 
                   train_idx = None,
                   val_idx = None, 
-                  test_dataset: np.ndarray = None,
-                  test_targets: np.ndarray = None):
+                  test_dataset: np.ndarray = None):
         """
         Function to load all positive and negative samples given a folder. This assumes there are two folders inside the
         specified folder, such that the file paths `folder_path/positive` and `folder_path/negative` exist. Positive
@@ -516,10 +515,10 @@ class CodeClassifierTrainerGPU(object):
         v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.float32)
         v_regions = torch.as_tensor(np.array(v_regions, dtype=np.int32), dtype=torch.float32)
         
-        print_images(t_regions,
+        print_images(v_regions,
                             path="data/classifier_training_samples/Validation_Dataset/",
                             batchID="val",
-                            activate=True)
+                            activate=self.debug)
 
 
         self.val_data = (v_regions, v_labels)
@@ -536,7 +535,7 @@ class CodeClassifierTrainerGPU(object):
         print_images(t_regions,
                             path="data/classifier_training_samples/Test_Dataset/",
                             batchID="test",
-                            activate=True)
+                            activate=self.debug)
         
         self.test_data = (t_regions, t_labels)
 
