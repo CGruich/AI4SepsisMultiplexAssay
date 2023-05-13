@@ -78,10 +78,6 @@ class CodeClassifierTrainerGPU(object):
         self.n_epochs = 20000
         # Learning rate for optimizer
         self.learning_rate = 1e-5
-        # Validation split variable (DEPRECATED)
-        #self.val_split = 0.2
-        # Max Transform Sequence (Deprecated)
-        #self.max_transform_sequence = 10
         # Keep track of the best validation accuracy
         self.best_val_acc = 0
         # Store the training, validation, test accuracy and training, validation, test loss
