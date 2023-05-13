@@ -10,6 +10,22 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from datetime import datetime
 
+# Prints augmented images out for debugging
+def print_augmented_image(sampleBatchTensor, 
+                          path: str = None,
+                          batchID: str = None,
+                          # Activate image saving
+                          activate: bool = False):
+    if activate:
+        if not os.path.exists(path):
+            os.makedirs(path)
+        imagePILTF = transforms.ToPILImage()
+        for imageInd in range(len(sampleBatchTensor)):
+            imageTensor = sampleBatchTensor[imageInd]
+            imagePIL = imagePILTF(imageTensor)
+            filename = batchID + "_" + str(imageInd) + ".png"
+            imagePIL.save(os.path.join(path, filename))
+
 class CodeClassifierTrainerGPU(object):
     def __init__(self, codes=None, 
                  model_save_path="data/models/code_classifier",
@@ -55,14 +71,14 @@ class CodeClassifierTrainerGPU(object):
         self.best_val_acc = 0
         self.losses = {"epoch": [], "ta": [], "va": [], "test_acc": [], "tl": [], "vl": [], "test_loss": []}
         self.best_val_acc = 0
-        self.patience = 20
+        self.patience = 10
 
         # Tensorboard
         self.log = log
         self.writer = None
 
         # How many epochs to wait before early-stopping is allowed.
-        self.warmup = 50
+        self.warmup = 20
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.loss_fn = nn.CrossEntropyLoss()
@@ -199,8 +215,11 @@ class CodeClassifierTrainerGPU(object):
         :return: Batches of augmented samples and the appropriate labels.
         """
 
+        # For saving augmented images for debugging,
+        debug = False
+
         batches = []
-        transform_prob = 0.2
+        transform_prob = 0.4
 
         # Shuffle the indices at which we will access the dataset.
         indices = [i for i in range(len(data))]
@@ -230,33 +249,84 @@ class CodeClassifierTrainerGPU(object):
 
             # Cast batch to tensor for PyTorch.
             samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
-            if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.GaussianBlur(kernel_size=np.random.choice([2*i+1 for i in range(10)]))
-                samples = tf(samples)
+            #print("Samples before Augmentation")
+            #print(samples)
+            print_augmented_image(samples,
+                                  path="data/classifier_training_samples/Data_Augmentation_Inspection/NoAugment",
+                                  batchID=str(i),
+                                  activate=debug)
 
+            #if np.random.uniform(0, 1) < transform_prob:
+            #    tf = transforms.GaussianBlur(kernel_size=np.random.choice([2*i+1 for i in range(10)]))
+            #    samples = tf(samples)
+            #    print("Samples after Gaussian blur")
+            #    print(samples)
+            #    print_augmented_image(samples,
+            #                        path="data/classifier_training_samples/Data_Augmentation_Inspection/GaussBlur",
+            #                        batchID=str(i))
+
+            # Need to loop through and rotate all image samples in the batch and readd them to the list
+            samplesTemp = []
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
-                samples = tf(samples)
+                for image in samples:
+                    # Reshape to from (batch_size, channels, height, width) to (channels, height, width)
+                    # Need to convert to Python Image Library (PIL) image representation for rotations to be proper
+                    singleImage = image.permute(0, 1, 2)
+                    #print("SINGLEIMAGE")
+                    #print(singleImage.shape)
+                    singleImagePIL = transforms.ToPILImage()(singleImage)
+                    tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
+                    singleImagePIL = tf(singleImagePIL)
+                    # Convert back to PyTorch tensor when done.
+                    sample = transforms.ToTensor()(singleImagePIL)
+                    samplesTemp.append(sample)
+                # Cast batch to tensor for PyTorch.
+                samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
+                #print("Samples after random rotation")
+                #print(samples)
+                print_augmented_image(samples,
+                                    path="data/classifier_training_samples/Data_Augmentation_Inspection/Rotations",
+                                    batchID=str(i),
+                                    activate=debug)
 
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomHorizontalFlip()
                 samples = tf(samples)
+                #print("Samples after random horizontal flip")
+                #print(samples)
+                print_augmented_image(samples,
+                                    path="data/classifier_training_samples/Data_Augmentation_Inspection/HorizontalFlip",
+                                    batchID=str(i),
+                                    activate=debug)
 
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomVerticalFlip()
                 samples = tf(samples)
+                #print("Samples after random vertical flip")
+                #print(samples)
+                print_augmented_image(samples,
+                                    path="data/classifier_training_samples/Data_Augmentation_Inspection/VerticalFlip",
+                                    batchID=str(i),
+                                    activate=debug)
 
-            if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomAutocontrast()
-                samples = tf(samples)
 
-            if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomAdjustSharpness(sharpness_factor=np.random.uniform(0, 10))
-                samples = tf(samples)
+            #if np.random.uniform(0, 1) < transform_prob:
+            #    tf = transforms.RandomAutocontrast()
+            #    samples = tf(samples)
+            #    print("Samples after random auto contrast")
+            #    print(samples)
 
-            if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomInvert()
-                samples = tf(samples)
+            #if np.random.uniform(0, 1) < transform_prob:
+            #    tf = transforms.RandomAdjustSharpness(sharpness_factor=np.random.uniform(0.5, 10))
+            #    samples = tf(samples)
+            #    print("Samples after random adjust sharpness")
+            #    print(samples)
+
+            #if np.random.uniform(0, 1) < transform_prob:
+            #    tf = transforms.RandomInvert()
+            #    samples = tf(samples)
+            #    print("Samples after random invert")
+            #    print(samples)
 
             # Legacy
             #factors = []
@@ -268,7 +338,7 @@ class CodeClassifierTrainerGPU(object):
 
             # Inconsistent torch and numpy calls
             #samples *= np.asarray(factors).astype(np.float32).reshape(-1, 1, 1, 1)
-            
+
             #samples *= torch.tensor(factors).reshape(-1, 1, 1, 1)
             
             #labels = torch.as_tensor(labels, dtype=torch.float32)
