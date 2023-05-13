@@ -661,54 +661,6 @@ def train_code_classifier(pipeline_inputs: dict = None,
     # data/classifier_training_samples/positive and
     # data/classifier_training_samples/negative
 
-    # Legacy Code
-    else:    
-        codes = ["1", "2", "3"]
-        trainer = CodeClassifierTrainerGPU(codes, model_save_path="data/models/code")
-        trainer.load_data("data/classifier_training_samples")
-        trainer.train()
-
-    '''# Train a new classifier with the data located under
-    # data/classifier_training_samples/positive and
-    # data/classifier_training_samples/negative
-    
-    # Returns list of lists
-    dataList = load_data(load_data_path, verbose=verbose)
-    # Based on the format of the return result of .load_data(),
-    # Extract all the targets of the training samples
-    targets = np.array(list(zip(*dataList))[-1])
-    # All the samples
-    dataset = np.asarray(load_data(load_data_path, verbose=verbose), dtype=object)
-
-    # Do a stratified train/test split of all samples into training and test datasets
-    # Returns the actual samples, not the indices of the samples.
-    trainDataset, testDataset = train_test_split(dataset, test_size=0.20, stratify=targets)
-    trainTargets = np.asarray(list(zip(*trainDataset))[-1])
-    
-    # CG: Stratified k-Fold cross-validation
-    if crossVal:
-        cvColumns = ["cv" + str(fold) for fold in range(1, k + 1)]
-        crossValDF = pd.DataFrame(columns=cvColumns)
-        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=randomState)
-        
-        dataset_idx = np.arange(len(trainDataset))
-        crossValScores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
-        foldInd = 1
-        for fold, (train_idx, val_idx) in enumerate(splits.split(dataset_idx, y=trainTargets)):
-            if verbose:
-                print('\n\nFold {}'.format(fold + 1))
-            trainer = RegionClassifierTrainerGPU(model_save_path=model_save_path, hpoTrial=hpoTrial, verbose=verbose, log=log, timestamp=timestamp, k=foldInd)
-            trainer.load_data(load_data_path, dataset, train_idx, val_idx, test_dataset=testDataset)
-            crossValScores = trainer.train(crossVal=crossVal, crossValScores=crossValScores)
-            # Keep track of what k-fold we are on for book-keeping
-            foldInd = foldInd + 1
-        
-        if verbose:
-            print("\nTRAINING COMPLETE.\nCross-Validation Dictionary:")
-            print(crossValScores)
-            for key, value in crossValScores.items():
-                print("Avg. " + str(key) + ": " + str(np.array(value).mean()))
-        return crossValScores '''
 def test_system(img_folder="/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)",
                 region_detector_path="data/best/best_region_classifier.pt",
                 code_classifier_path="data/best/best_code_classifier.pt"):
