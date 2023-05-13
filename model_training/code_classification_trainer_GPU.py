@@ -131,7 +131,7 @@ class CodeClassifierTrainerGPU(object):
 
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
-                predictedLabels = torch.tensor((torch.argmax(predictions, dim=1) + 1).float(), requires_grad=True)
+                predictedLabels = ((torch.argmax(predictions, dim=1) + 1).float()).clone().detach().requires_grad_(True)
 
                 # Compute the loss and take one step along the gradient.
                 optimizer.zero_grad()
@@ -219,7 +219,7 @@ class CodeClassifierTrainerGPU(object):
         debug = False
 
         batches = []
-        transform_prob = 0.4
+        transform_prob = 0.2
 
         # Shuffle the indices at which we will access the dataset.
         indices = [i for i in range(len(data))]
