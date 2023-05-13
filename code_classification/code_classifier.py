@@ -5,36 +5,62 @@ from utils import helper_functions
 
 
 class CodeClassifier(nn.Module):
-    def __init__(self, n_codes, region_shape=(1, 128, 128), model_load_path=None):
+    def __init__(self, n_codes, 
+                 region_shape=(1, 128, 128),
+                 fcSize: int = 256,
+                 fcNum: int = 2,
+                 dropoutRate: float = 0.1, 
+                 model_load_path=None):
         super().__init__()
+        
         # CG: CPU or GPU, prioritizes GPU if available.
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         ch1 = 64
         ch2 = 32
         ch3 = 16
-        h1 = 256
+        h1 = fcSize
         self.conv_layers = [
             nn.BatchNorm2d(1),
             nn.Conv2d(in_channels=1, out_channels=ch1, kernel_size=(6,6), stride=(3,3)),
             nn.PReLU(),
 
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropoutRate),
             nn.MaxPool2d(kernel_size=(2,2)),
 
             nn.BatchNorm2d(ch1),
             nn.Conv2d(in_channels=ch1, out_channels=ch2, kernel_size=(4, 4), stride=(2, 2)),
             nn.PReLU(),
 
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropoutRate),
             nn.MaxPool2d(kernel_size=(2,2)),
 
             nn.BatchNorm2d(ch2),
             nn.Conv2d(in_channels=ch2, out_channels=ch3, kernel_size=(3, 3), stride=(1, 1)),
             nn.PReLU(),
 
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropoutRate),
         ]
+
+        '''# Convolutional layers reduce the size of their input by some amount. Because of this, we need to find out how
+        # many features will remain when we finish passing the input through the convolutional layers. Once we know,
+        # we can concatenate the output of the final convolutional layer into one long vector so we can pass it through
+        # the feedforward layers for classification.
+        detected_conv_features = helper_functions.detect_conv_features(region_shape, self.conv_layers)
+        print("FINAL VECTOR LENGTH:",detected_conv_features)
+        self.ff_layers = [
+            nn.Flatten(),
+            nn.Dropout(p=dropoutRate),
+            nn.BatchNorm1d(detected_conv_features),
+            nn.Linear(detected_conv_features, h1),
+            nn.PReLU(),
+
+            nn.BatchNorm1d(h1),
+            nn.Linear(h1, n_codes),
+            # Not compatible with cross-entropy loss function, as cross-entropy loss applies softmax internally
+            # For now, this is commented out. In production outside of model training, this can be uncommented and used.
+            #nn.Softmax(dim=-1)
+        ]'''
 
         # Convolutional layers reduce the size of their input by some amount. Because of this, we need to find out how
         # many features will remain when we finish passing the input through the convolutional layers. Once we know,
@@ -44,17 +70,42 @@ class CodeClassifier(nn.Module):
         print("FINAL VECTOR LENGTH:",detected_conv_features)
         self.ff_layers = [
             nn.Flatten(),
-            nn.Dropout(p=0.1),
+            nn.Dropout(p=dropoutRate),
             nn.BatchNorm1d(detected_conv_features),
             nn.Linear(detected_conv_features, h1),
-            nn.PReLU(),
+            nn.PReLU()]
 
-            nn.BatchNorm1d(h1),
-            nn.Linear(h1, n_codes),
+        self.fc_layers = []
+        # Ensure at least one fully-connected layer
+        assert fcNum >= 1
+        # If more than 1 fully connected layer to add,
+        if fcNum > 1:
+            # For each layer, not counting the very last layer
+            for _ in range(fcNum - 1):
+                # Append dropout layer to prevent overfitting
+                self.fc_layers.append(nn.Dropout(p=dropoutRate))
+                # Append batch normalization
+                self.fc_layers.append(nn.BatchNorm1d(h1))
+                # Append a linear layer
+                self.fc_layers.append(nn.Linear(h1, h1))
+                # Append PRELU() activation function
+                self.fc_layers.append(nn.PReLU())
+            # Add the final layer that outputs the code label predictions
+            self.fc_layers.append(nn.Dropout(p=dropoutRate))
+            self.fc_layers.append(nn.BatchNorm1d(h1))
+            self.fc_layers.append(nn.Linear(h1, n_codes))
+            # Not compatible with cross-entropy loss function, as cross-entropy loss applies softmax internally
+            # For now, this is commented out. In production outside of model training, this can be uncommented and used.
             #nn.Softmax(dim=-1)
-        ]
-
-        layers = self.conv_layers + self.ff_layers
+        # Else if only one fully connected layer to add
+        else:
+            # Dropout layer to prevent overfitting
+            self.fc_layers.append(nn.Dropout(p=dropoutRate))
+            self.fc_layers.append(nn.BatchNorm1d(h1))
+            self.fc_layers.append(nn.Linear(h1, n_codes))
+        
+        # Combine all the layers
+        layers = self.conv_layers + self.ff_layers + self.fc_layers
         self.model = nn.Sequential(*layers)
         self.model.to(self.device)
         
