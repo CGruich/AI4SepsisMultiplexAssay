@@ -40,12 +40,16 @@ class CodeClassifierTrainerGPU(object):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
         self.verbose = verbose
+        # Print availability to GPU
         if self.verbose:
             print("CUDA Availability: " + str(torch.cuda.is_available()))
 
+        # Number of codes for the multi-class model
         n_codes = len(codes)
         self.model = CodeClassifier(n_codes)
+        # Move to GPU if available
         self.model.to(self.device)
+        # Check if model is on GPU
         if self.verbose:
             print("Model Loaded to GPU: " + str(next(self.model.parameters()).is_cuda))
         
@@ -54,23 +58,42 @@ class CodeClassifierTrainerGPU(object):
 
         self.num_codes = n_codes
 
+        # Python list indexing starts at 0, but our class labels start at 1
+        # Let's just confirm the mapping between our class labels and internal label indexing,
         self.code_map = {code: idx for idx, code in enumerate(codes)}
         print(f"Code Map Between Sample Filenames and Internal Code Integer Designation:\n{self.code_map}")
 
+        # Save the model at this path
         self.model_save_path = model_save_path
+        # Save the model every n epochs
         self.save_every_n = save_every_n
 
+        # Save the model results as a timestamp
         self.log_timestamp = timestamp
         
         # Hyper-parameters.
+        # Batch Size
         self.batch_size = batch_size
+        # Num Epochs
         self.n_epochs = 20000
+        # Learning rate for optimizer
         self.learning_rate = 1e-4
-        self.val_split = 0.2
-        self.max_transform_sequence = 10
+        # Validation split variable (DEPRECATED)
+        #self.val_split = 0.2
+        # Max Transform Sequence (Deprecated)
+        #self.max_transform_sequence = 10
+        # Keep track of the best validation accuracy
         self.best_val_acc = 0
-        self.losses = {"epoch": [], "ta": [], "va": [], "test_acc": [], "tl": [], "vl": [], "test_loss": []}
-        self.best_val_acc = 0
+        # Store the training, validation, test accuracy and training, validation, test loss
+        self.losses = {"epoch": [], 
+                       "ta": [], 
+                       "va": [], 
+                       "test_acc": [], 
+                       "tl": [], 
+                       "vl": [], 
+                       "test_loss": []}
+        # How many epochs to wait before stopping training if the model does not improve
+        # This is an early-stopping hyperparameter
         self.patience = 10
 
         # Tensorboard
@@ -80,9 +103,12 @@ class CodeClassifierTrainerGPU(object):
         # How many epochs to wait before early-stopping is allowed.
         self.warmup = 20
 
+        # Using the Adam optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        # Cross Entropy Loss for multi-class problems
         self.loss_fn = nn.CrossEntropyLoss()
 
+        # If logging via tensorboard, define a dedicated writer to log the results
         if self.log:
             self.writer = SummaryWriter(os.path.join(self.model_save_path, self.log_timestamp, "logs"))
 
@@ -110,20 +136,25 @@ class CodeClassifierTrainerGPU(object):
         
         writer = self.writer
         verbose = self.verbose
+        # Default loss should be infinite, as this corresponds to the worst possible value
         best_val_loss = np.inf
         self.test_loss_for_best_val = np.inf
         self.test_acc_for_best_val = np.inf
 
         # For each epoch
         for epoch in range(self.n_epochs + 1):
+            # Reset training accuracy and loss to zero
             train_acc = 0
             train_loss = 0
 
             # Generate batches of augmented training samples.
+            # CG: These augmented samples are confirmed to be reasonable with commit #36a7ce4
             batches = self.generate_batches(train_data)
+            # For each generated batch,
             for batch in tqdm(batches, desc="Epoch " + str(epoch) + ":", disable=not verbose):
                 #print("TRAIN BATCH")
                 #print(batch)
+                # Get the samples and labels
                 samples, labels = batch
                 # Moving the model to GPU is in-place, but moving the data is not.
                 samples = samples.to(self.device)
@@ -140,15 +171,20 @@ class CodeClassifierTrainerGPU(object):
                 loss.backward()
                 optimizer.step()
 
-                train_acc += self.compute_accuracy(labels, predictions)
+                # Compute the accuracy
+                train_acc += self.compute_accuracy(labels, predictedLabels)
                 train_loss += loss.detach().item()
 
             # Report training loss, training accuracy, validation loss, validation accuracy, and test loss/accuracy.
+            # This is a per-batch average of the loss and accuracy, making the training robust to different batch sizes/gradient estimates
             train_loss /= len(batches)
             train_acc /= len(batches)
+            # Validation loss and accuracy
             val_loss, val_acc = self.validate()
+            # Test loss and accuracy
             test_loss, test_acc = self.test()
 
+            # Write the loss and accuracies to tensorboard
             writer.add_scalars("Loss", {"Train_Loss":train_loss, 
                                         "Val_Loss":val_loss, 
                                         "Test_Loss":test_loss}, epoch)
@@ -183,13 +219,21 @@ class CodeClassifierTrainerGPU(object):
                 self.test_acc_for_best_val = test_acc
                 self.save_model(epoch)
 
+            # If the loss is greater than the best loss (i.e., the current minimum loss)
             if val_loss > best_val_loss:
+                # If we are past the warmup stage,
                 if epoch > warmup:
+                    # Lower the patience of how long to wait for the model accuracy to improve
                     patience -= 1
+            # If our new loss is best,
             else:
+                # Update the best loss with the new loss
                 best_val_loss = val_loss
+                # Update the test loss corresponding to the best validation loss
                 self.test_loss_for_best_val = test_loss
+                # Reset the patience because the model improved
                 patience = self.patience
+            # If we are out of training patience and past the warmup stage,
             if patience == 0 and epoch > warmup:
                 break
 
@@ -198,7 +242,8 @@ class CodeClassifierTrainerGPU(object):
         # Save changes to hard drive and close tensorboard writer in memory.
         writer.flush()
         writer.close()
-
+        
+        # If cross-validating, then add the current fold scores to the running cross-validation counts of accuracy and loss
         if crossVal:
             crossValScores["Val_Loss"].append(best_val_loss)
             crossValScores["Val_Acc"].append(self.best_val_acc)
@@ -377,7 +422,7 @@ class CodeClassifierTrainerGPU(object):
         predictions = self.model.forward(samples)
         predictedLabels = (torch.argmax(predictions, dim=1) + 1).float()
         loss = self.loss_fn(predictedLabels, labels).item()
-        acc = self.compute_accuracy(labels, predictions)
+        acc = self.compute_accuracy(labels, predictedLabels)
 
         # Set the model back to training mode.
         self.model.train()
@@ -408,7 +453,7 @@ class CodeClassifierTrainerGPU(object):
         predictions = self.model.forward(samples)
         predictedLabels = (torch.argmax(predictions, dim=1) + 1).float()
         loss = self.loss_fn(predictedLabels, labels).item()
-        acc = self.compute_accuracy(labels, predictions)
+        acc = self.compute_accuracy(labels, predictedLabels)
 
         # Set the model back to training mode.
         self.model.train()
@@ -417,15 +462,15 @@ class CodeClassifierTrainerGPU(object):
         return loss, acc
     
     @torch.no_grad()
-    def compute_accuracy(self, labels, predictions):
+    def compute_accuracy(self, labels, predictedLabels):
         """
         Function to compute the accuracy of a batch of predictions given a batch of labels.
         :param labels: Ground-truth labels to compare to.
-        :param predictions: Predicted labels from the model.
+        :param predictedLabels: Predicted labels from the model.
         :return: Computed accuracy.
         """
 
-        predicted_labels = predictions.argmax(dim=-1) + 1
+        predicted_labels = predictedLabels.argmax(dim=-1) + 1
         #print("predicted_labels")
         #print(predicted_labels)
         #print("labels")
