@@ -32,13 +32,15 @@ class CodeClassifierTrainerGPU(object):
                  save_every_n: int = 10,
                  batch_size: int = 256,
                  lr: float = 1e-5,
+                 fcSize: int = 256,
+                 fcNum: int = 2,
+                 dropoutRate: float = 0.1, 
                  verbose: bool = True,
                  log: bool = True,
-                 timestamp: str = datetime.now().strftime("%m_%d_%y_%H:%M"),
-                 k: int = None):
+                 timestamp: str = datetime.now().strftime("%m_%d_%y_%H:%M")):
         
         # Prints out augmented images if set to true
-        self.debug = True
+        self.debug = False
 
         # CG: CPU or GPU, prioritizes GPU if available.
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -50,12 +52,16 @@ class CodeClassifierTrainerGPU(object):
 
         # Number of codes for the multi-class model
         n_codes = len(codes)
-        self.model = CodeClassifier(n_codes)
+        self.model = CodeClassifier(n_codes,
+                                    fcSize=fcSize,
+                                    fcNum=fcNum,
+                                    dropoutRate=dropoutRate)
 
         # Print the model architecture as a sanity check
-        print("\nCode Classifier Model Architecture:")
-        print(self.model)
-        print("\n")
+        if self.verbose:
+            print("\nCode Classifier Model Architecture:")
+            print(self.model)
+            print("\n")
 
         # Move to GPU if available
         self.model.to(self.device)
@@ -71,7 +77,8 @@ class CodeClassifierTrainerGPU(object):
         # Python list indexing starts at 0, but our class labels start at 1
         # Let's just confirm the mapping between our class labels and internal label indexing,
         self.code_map = {code: idx for idx, code in enumerate(codes)}
-        print(f"Code Map Between Sample Filenames and Internal Code Integer Designation:\n{self.code_map}")
+        if self.verbose:
+            print(f"Code Map Between Sample Filenames and Internal Code Integer Designation:\n{self.code_map}")
 
         # Save the model at this path
         self.model_save_path = model_save_path
@@ -140,8 +147,8 @@ class CodeClassifierTrainerGPU(object):
         patience = self.patience
         warmup = self.warmup
         
-        writer = self.writer
-        verbose = self.verbose
+        if self.log:
+            writer = self.writer
         # Default loss should be infinite, as this corresponds to the worst possible value
         best_val_loss = np.inf
         self.test_loss_for_best_val = np.inf
@@ -157,7 +164,7 @@ class CodeClassifierTrainerGPU(object):
             # CG: These augmented samples are confirmed to be reasonable with commit #36a7ce4
             batches = self.generate_batches(train_data)
             # For each generated batch,
-            for batch in tqdm(batches, desc="Epoch " + str(epoch) + ":", disable=not verbose):
+            for batch in tqdm(batches, desc="Epoch " + str(epoch) + ":", disable=not self.verbose):
                 # Clear gradients
                 optimizer.zero_grad()
 
@@ -195,20 +202,21 @@ class CodeClassifierTrainerGPU(object):
             # Test loss and accuracy
             test_loss, test_acc = self.test()
 
-            # Write the loss and accuracies to tensorboard
-            writer.add_scalars("Loss", {"Train_Loss":train_loss, 
-                                        "Val_Loss":val_loss, 
-                                        "Test_Loss":test_loss}, epoch)
-            writer.add_scalars("Accuracy", {"Train_Acc":train_acc, 
-                                            "Val_Acc":val_acc, 
-                                            "Test_Acc":test_acc}, epoch)
-            writer.add_scalar("Train_Loss", train_loss, epoch)
-            writer.add_scalar("Train_Acc", train_acc, epoch)
-            writer.add_scalar("Val_Loss", val_loss, epoch)
-            writer.add_scalar("Val_Acc", val_acc, epoch)
-            writer.add_scalar("Test_Loss", test_loss, epoch)
-            writer.add_scalar("Test_Acc", test_acc, epoch)
-            writer.add_scalar("Patience (Early Stopping)", patience, epoch)
+            if self.log:
+                # Write the loss and accuracies to tensorboard
+                writer.add_scalars("Loss", {"Train_Loss":train_loss, 
+                                            "Val_Loss":val_loss, 
+                                            "Test_Loss":test_loss}, epoch)
+                writer.add_scalars("Accuracy", {"Train_Acc":train_acc, 
+                                                "Val_Acc":val_acc, 
+                                                "Test_Acc":test_acc}, epoch)
+                writer.add_scalar("Train_Loss", train_loss, epoch)
+                writer.add_scalar("Train_Acc", train_acc, epoch)
+                writer.add_scalar("Val_Loss", val_loss, epoch)
+                writer.add_scalar("Val_Acc", val_acc, epoch)
+                writer.add_scalar("Test_Loss", test_loss, epoch)
+                writer.add_scalar("Test_Acc", test_acc, epoch)
+                writer.add_scalar("Patience (Early Stopping)", patience, epoch)
 
             self.losses["ta"].append(train_acc)
             self.losses["va"].append(val_acc)
@@ -224,7 +232,7 @@ class CodeClassifierTrainerGPU(object):
 
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:
-                if verbose:
+                if self.verbose:
                     print("NEW BEST VAL. ACCURACY", val_acc, epoch)
                 self.best_val_acc = val_acc
                 self.test_acc_for_best_val = test_acc
@@ -250,9 +258,11 @@ class CodeClassifierTrainerGPU(object):
 
             if epoch % self.save_every_n == 0:
                 self.save_model(epoch)
-        # Save changes to hard drive and close tensorboard writer in memory.
-        writer.flush()
-        writer.close()
+        
+        if self.log:
+            # Save changes to hard drive and close tensorboard writer in memory.
+            writer.flush()
+            writer.close()
         
         # If cross-validating, then add the current fold scores to the running cross-validation counts of accuracy and loss
         if crossVal:

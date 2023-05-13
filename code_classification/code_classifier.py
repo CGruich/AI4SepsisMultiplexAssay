@@ -42,32 +42,12 @@ class CodeClassifier(nn.Module):
             nn.Dropout(p=dropoutRate),
         ]
 
-        '''# Convolutional layers reduce the size of their input by some amount. Because of this, we need to find out how
-        # many features will remain when we finish passing the input through the convolutional layers. Once we know,
-        # we can concatenate the output of the final convolutional layer into one long vector so we can pass it through
-        # the feedforward layers for classification.
-        detected_conv_features = helper_functions.detect_conv_features(region_shape, self.conv_layers)
-        print("FINAL VECTOR LENGTH:",detected_conv_features)
-        self.ff_layers = [
-            nn.Flatten(),
-            nn.Dropout(p=dropoutRate),
-            nn.BatchNorm1d(detected_conv_features),
-            nn.Linear(detected_conv_features, h1),
-            nn.PReLU(),
-
-            nn.BatchNorm1d(h1),
-            nn.Linear(h1, n_codes),
-            # Not compatible with cross-entropy loss function, as cross-entropy loss applies softmax internally
-            # For now, this is commented out. In production outside of model training, this can be uncommented and used.
-            #nn.Softmax(dim=-1)
-        ]'''
-
         # Convolutional layers reduce the size of their input by some amount. Because of this, we need to find out how
         # many features will remain when we finish passing the input through the convolutional layers. Once we know,
         # we can concatenate the output of the final convolutional layer into one long vector so we can pass it through
         # the feedforward layers for classification.
         detected_conv_features = helper_functions.detect_conv_features(region_shape, self.conv_layers)
-        print("FINAL VECTOR LENGTH:",detected_conv_features)
+        #print("FINAL VECTOR LENGTH:",detected_conv_features)
         self.ff_layers = [
             nn.Flatten(),
             nn.Dropout(p=dropoutRate),

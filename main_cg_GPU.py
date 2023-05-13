@@ -15,6 +15,43 @@ import os.path as osp
 from pathlib import Path
 import json
 from datetime import datetime
+# Hyperparameter optimization
+import optuna
+from optuna.trial import TrialState
+
+# Objective function for Bayesian optimization with OpTuna
+def objective(trial,
+              pipeline_inputs: dict = None):
+    # Learning rate
+    lr = trial.suggest_float("learning_rate", 1e-8, 1e-2)
+    # Batch size
+    bs = trial.suggest_int("batch_size", 128, 1024, 64)
+    # Fully connected layer size
+    fcSize = trial.suggest_int("fully_connected_size", 128, 1024, 64)
+    # Number of fully connected layers
+    fcNum = trial.suggest_int("fully_connected_layers", 1, 5, 1)
+    # Dropout rate
+    dr = trial.suggest_float("dropout_rate", 0.0, 0.8)
+
+    # Dictionary of hyperparameters
+    hyperDict = {"lr": lr, 
+                 "bs": bs, 
+                 "fcSize": fcSize, 
+                 "fcNum": fcNum, 
+                 "dr": dr}
+    
+    # Run stratified k-fold cross-validation with the hyperparameters
+    # Via the pipeline functionality of the workflow,
+    crossValScores = train_code_classifier(pipeline_inputs=pipeline_inputs,
+                          timestamp=None,
+                          hyperDict=hyperDict)
+    
+    # Average stratified k-fold cross-validation accuracy
+    avgValAccuracy = np.array(crossValScores["Val_Acc"]).mean()
+
+    # Return this accuracy, which we rely on for the Bayesian loop
+    return avgValAccuracy
+
 
 def load_data(folder_path, 
               verbose=True):
@@ -572,17 +609,20 @@ def classify_regions(pipeline_inputs: dict = None,
 
 
 def train_code_classifier(pipeline_inputs: dict = None,
-                          crossVal=False,
-                          k=5,
-                          randomState=100,
-                          verbose=True,
                           log=True,
-                          timestamp: str = None):
+                          timestamp: str = None,
+                          hyperDict: dict = None):
+    
     if timestamp is None:
         timestamp = datetime.now().strftime("%m_%d_%y_%H:%M")
 
     # If we are using the control panel .ipynb pipeline,
     if pipeline_inputs is not None:
+        
+        # Timestamps for record-keeping
+        if pipeline_inputs["timestamp"] is None:
+            pipeline_inputs["timestamp"] = datetime.now().strftime("%m_%d_%y_%H:%M")
+        
         codes = pipeline_inputs["code_list"]
         trainer = CodeClassifierTrainerGPU(codes, model_save_path=pipeline_inputs["model_save_parent_directory"])
         codeDataComposite = []
@@ -590,8 +630,11 @@ def train_code_classifier(pipeline_inputs: dict = None,
             codePath = osp.join(pipeline_inputs["sample_parent_directory"], "code " + code)
             codeData = load_code(code_folder_path=codePath)
             codeDataComposite = codeDataComposite + codeData
+        
         # Total composite dataset samples
-        print("Total Composite Dataset Training Samples:\n{}".format(len(codeDataComposite)))
+        # Only print verbosely if we are not hyperparameter optimizing
+        if hyperDict is None:
+            print("Total Composite Dataset Training Samples:\n{}".format(len(codeDataComposite)))
 
         # Based on the format of the return result of .load_code(),
         # Extract all the targets of the training samples
@@ -601,11 +644,12 @@ def train_code_classifier(pipeline_inputs: dict = None,
 
         # Do a straified train/test split of all samples into training and test datasets
         # Returns the actual samples, not the indices of the samples.
-        trainDataset, testDataset = train_test_split(dataset, test_size=0.20, stratify=targets)
+        trainDataset, testDataset = train_test_split(dataset, 
+                                                     test_size=pipeline_inputs["test_size"], 
+                                                     stratify=targets,
+                                                     random_state=pipeline_inputs["strat_kfold"]["random_state"])
         # Train targets
         trainTargets = np.asarray(list(zip(*trainDataset))[-1])
-        # Test targets
-        testTargets = np.asarray(list(zip(*testDataset))[-1])
 
         # CG: Stratified k-Fold cross-validation
         # If doing strat. k-fold cross-val.,
@@ -622,15 +666,28 @@ def train_code_classifier(pipeline_inputs: dict = None,
             foldInd = 1
             # For each fold in the training dataset, define a new training dataset and validation dataset based off the training targets
             for fold, (train_idx, val_idx) in enumerate(splits.split(trainDataset_idx, y=trainTargets)):
-                if verbose:
+                if pipeline_inputs["verbose"]:
                     print('\n\nFold {}'.format(fold + 1))
                 # Define a code classifier
-                trainer = CodeClassifierTrainerGPU(codes=codes,
-                                                   model_save_path=pipeline_inputs["model_save_parent_directory"], 
-                                                   verbose=True, 
-                                                   log=log, 
-                                                   timestamp=timestamp, 
-                                                   k=foldInd)
+                # If we are not Bayesian optimizing,
+                if hyperDict is None:
+                    trainer = CodeClassifierTrainerGPU(codes=codes,
+                                                    model_save_path=pipeline_inputs["model_save_parent_directory"],
+                                                    verbose=pipeline_inputs["verbose"],
+                                                    log=pipeline_inputs["log"], 
+                                                    timestamp=pipeline_inputs["timestamp"])
+                # Else, if we are Bayesian optimizing,
+                else:
+                    trainer = CodeClassifierTrainerGPU(codes=codes,
+                                                    model_save_path=pipeline_inputs["model_save_parent_directory"],
+                                                    batch_size=hyperDict["bs"],
+                                                    lr=hyperDict["lr"],
+                                                    fcSize=hyperDict["fcSize"],
+                                                    fcNum=hyperDict["fcNum"],
+                                                    dropoutRate=hyperDict["dr"],
+                                                    verbose=pipeline_inputs["verbose"], 
+                                                    log=pipeline_inputs["log"], 
+                                                    timestamp=pipeline_inputs["timestamp"])
                 # Load code classifier training data and validation data
                 # Validation data is taken from the training dataset and targets (trainDataset, trainTargets)
                 # Test dataset and test targets are inputted separately
@@ -639,8 +696,7 @@ def train_code_classifier(pipeline_inputs: dict = None,
                                   trainTargets, 
                                   train_idx, 
                                   val_idx, 
-                                  test_dataset=testDataset,
-                                  test_targets=testTargets)
+                                  test_dataset=testDataset)
                 # Train
                 crossValScores = trainer.train(crossVal=pipeline_inputs["strat_kfold"]["activate"], 
                                                crossValScores=crossValScores)
@@ -648,18 +704,12 @@ def train_code_classifier(pipeline_inputs: dict = None,
                 foldInd = foldInd + 1
             
             # Print out the average cross-validation results
-            if verbose:
+            if pipeline_inputs["verbose"]:
                 print("\nTRAINING COMPLETE.\nCross-Validation Dictionary:")
                 print(crossValScores)
                 for key, value in crossValScores.items():
                     print("Avg. " + str(key) + ": " + str(np.array(value).mean()))
             return crossValScores
-        #trainer.load_data(pipeline_inputs["sample_parent_directory"])
-        #trainer.train()
-    
-    # Train a new classifier with the data located under
-    # data/classifier_training_samples/positive and
-    # data/classifier_training_samples/negative
 
 def test_system(img_folder="/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)",
                 region_detector_path="data/best/best_region_classifier.pt",
@@ -814,7 +864,38 @@ if __name__ == "__main__":
             train_code_classifier()
         else:
             train_code_classifier(pipeline_inputs=pipeline_inputs)
-    
+    elif action == "bayesian_optimize":
+        # Currently only implemented for the Jupyter notebook pipeline,
+        if pipeline_inputs is not None:
+            # Create an OpTuna study, maximize the accuracy
+            study = optuna.create_study(direction="maximize")
+            # By default, OpTuna objective functions for objective minimization/maximization does not accept custom input variables
+            # However, we can easily accomodate custom input variables in this way with some lambda operations,
+            objective_with_custom_input = lambda trial: objective(trial, pipeline_inputs)
+
+            # Optimize the study
+            study.optimize(objective_with_custom_input, n_trials=2, timeout=600)
+
+            # Get the pruned trials (trials pruned prematurely)
+            pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
+            # Get the completed trials
+            complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
+
+            # Summarize
+            print("\n\nStudy statistics: ")
+            print("  Number of finished trials: ", len(study.trials))
+            print("  Number of pruned trials: ", len(pruned_trials))
+            print("  Number of complete trials: ", len(complete_trials))
+
+            print("Best trial:")
+            trial = study.best_trial
+
+            print("  Value: ", trial.value)
+
+            print("  Params: ")
+            for key, value in trial.params.items():
+                print("    {}: {}".format(key, value))
+
     # Legacy Code
     elif action == 'test_system':
         assert(reg_path is not None and code_path is not None)
