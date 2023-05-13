@@ -154,7 +154,7 @@ class CodeClassifierTrainerGPU(object):
             for batch in tqdm(batches, desc="Epoch " + str(epoch) + ":", disable=not verbose):
                 # Clear gradients
                 optimizer.zero_grad()
-                
+
                 #print("TRAIN BATCH")
                 #print(batch)
                 # Get the samples and labels
@@ -168,7 +168,10 @@ class CodeClassifierTrainerGPU(object):
                 predictedLabels = ((torch.argmax(predictions, dim=1) + 1).float()).clone().detach().requires_grad_(True)
 
                 # Compute the loss and take one step along the gradient.
-                loss = loss_fn(predictedLabels, labels)
+                # Our barcodes are labelled from 1 ... N
+                # But the cross-entropy loss function accepts class labels from 0 ... N-1
+                # Here, we just decrement by 1 to match this convention
+                loss = loss_fn((predictedLabels - 1), (labels - 1))
 
                 loss.backward()
                 optimizer.step()
@@ -423,7 +426,7 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         predictedLabels = (torch.argmax(predictions, dim=1) + 1).float()
-        loss = self.loss_fn(predictedLabels, labels).item()
+        loss = self.loss_fn(predictedLabels - 1, labels - 1).item()
         acc = self.compute_accuracy(labels, predictedLabels)
 
         # Set the model back to training mode.
@@ -454,7 +457,7 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         predictedLabels = (torch.argmax(predictions, dim=1) + 1).float()
-        loss = self.loss_fn(predictedLabels, labels).item()
+        loss = self.loss_fn(predictedLabels - 1, labels - 1).item()
         acc = self.compute_accuracy(labels, predictedLabels)
 
         # Set the model back to training mode.

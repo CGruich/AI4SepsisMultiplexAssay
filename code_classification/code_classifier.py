@@ -13,7 +13,7 @@ class CodeClassifier(nn.Module):
         ch1 = 64
         ch2 = 32
         ch3 = 16
-        h1 = 64
+        h1 = 256
         self.conv_layers = [
             nn.BatchNorm2d(1),
             nn.Conv2d(in_channels=1, out_channels=ch1, kernel_size=(6,6), stride=(3,3)),
@@ -51,7 +51,7 @@ class CodeClassifier(nn.Module):
 
             nn.BatchNorm1d(h1),
             nn.Linear(h1, n_codes),
-            nn.Softmax(dim=-1)
+            #nn.Softmax(dim=-1)
         ]
 
         layers = self.conv_layers + self.ff_layers
