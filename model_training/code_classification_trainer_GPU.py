@@ -77,7 +77,7 @@ class CodeClassifierTrainerGPU(object):
         # Num Epochs
         self.n_epochs = 20000
         # Learning rate for optimizer
-        self.learning_rate = 1e-4
+        self.learning_rate = 1e-5
         # Validation split variable (DEPRECATED)
         #self.val_split = 0.2
         # Max Transform Sequence (Deprecated)
@@ -152,6 +152,9 @@ class CodeClassifierTrainerGPU(object):
             batches = self.generate_batches(train_data)
             # For each generated batch,
             for batch in tqdm(batches, desc="Epoch " + str(epoch) + ":", disable=not verbose):
+                # Clear gradients
+                optimizer.zero_grad()
+                
                 #print("TRAIN BATCH")
                 #print(batch)
                 # Get the samples and labels
@@ -165,7 +168,6 @@ class CodeClassifierTrainerGPU(object):
                 predictedLabels = ((torch.argmax(predictions, dim=1) + 1).float()).clone().detach().requires_grad_(True)
 
                 # Compute the loss and take one step along the gradient.
-                optimizer.zero_grad()
                 loss = loss_fn(predictedLabels, labels)
 
                 loss.backward()
