@@ -378,20 +378,6 @@ class CodeClassifierTrainerGPU(object):
             #    print("Samples after random invert")
             #    print(samples)
 
-            # Legacy
-            #factors = []
-            
-            #for j in range(len(samples)):
-            #    max_factor = 65535./torch.max(samples[j])
-            #    min_factor = 0.5
-            #    factors.append(np.random.uniform(min_factor, max_factor))
-
-            # Inconsistent torch and numpy calls
-            #samples *= np.asarray(factors).astype(np.float32).reshape(-1, 1, 1, 1)
-
-            #samples *= torch.tensor(factors).reshape(-1, 1, 1, 1)
-            
-            #labels = torch.as_tensor(labels, dtype=torch.float32)
             labels = torch.as_tensor(np.array(labels, dtype=np.int32), dtype=torch.float32)
 
             # CG: Enable if not work
@@ -546,52 +532,6 @@ class CodeClassifierTrainerGPU(object):
         print(self.val_data)
         print("self.test_data")
         print(self.test_data)
-
-        # Legacy Code
-        '''positive_sample_folder = os.path.join(folder_path, "positive")
-        data = []
-        label_counts = {key:0 for key in self.code_map.keys()}
-
-        # For each image in the positive samples folder.
-        for file_name in os.listdir(positive_sample_folder):
-            if not file_name.endswith(".png"):
-                continue       
-            if "set" in file_name:
-                end = file_name.find("_")
-                code = file_name[:end].strip()
-            else:
-                # CG: Legacy code for square particles
-                #code = file_name[:file_name.find("(")].strip()
-                # CG: For gear particles, this is just a new filename search criteria for how the samples are labeled,
-                code = file_name[file_name.find("("):file_name.find("_")].strip()
-            # Load region.
-            region = cv2.imread(os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
-            label = self.one_hot(self.code_map[code])
-            label_counts[code] += 1
-
-            # Append region and positive label to dataset.
-            data.append([region.reshape(1, *region.shape), label])
-
-        n_positive = len(data)
-        print("Loaded {} positive training samples.".format(n_positive))
-        print("Label counts:")
-        for key, value in label_counts.items():
-            print("{} | {}".format(key, value))
-
-        # Randomly shuffle all loaded samples.
-        np.random.shuffle(data)
-
-        # Split resulting dataset into training and validation sets.
-        split = int(round(len(data)*self.val_split))
-        self.train_data = np.asarray(data[split:])
-        val_data = np.asarray(data[:split])
-
-        v_labels = []
-        v_regions = []
-        for region, label in val_data:
-            v_labels.append(label)
-            v_regions.append(region)
-        self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32), torch.as_tensor(v_labels, dtype=torch.float32))'''
 
     def save_model(self, epoch):
         """
