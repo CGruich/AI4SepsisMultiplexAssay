@@ -56,9 +56,6 @@ def objective(trial,
 
 # Define a function that we can use to restart the optimization from the last trial.
 # This is useful if we try a high-throughput amount of trials and don't want to start over after a crash, for example
-def pruning_callback(study: optuna.study.Study, trial: optuna.trial.FrozenTrial) -> None:
-    study.set_user_attr('best_trial', study.best_trial)
-
 def checkpoint_study(study: optuna.study.Study,
                      objectiveFunction = None,
                      numTrials: int = None,
