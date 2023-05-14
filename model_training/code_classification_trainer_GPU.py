@@ -97,6 +97,12 @@ class CodeClassifierTrainerGPU(object):
         self.learning_rate = lr
         # Keep track of the best validation accuracy
         self.best_val_acc = 0
+        # When early-stopping based on some loss
+        # We often want to early-stop based on some finite precision.
+        # In other words, if the loss improves by 10^-6, this is not real improvement for practical purposes
+        # Here, we define a minimum amount of improvement for the loss function
+        self.earlyStopDelta = 0.1
+
         # Store the training, validation, test accuracy and training, validation, test loss
         self.losses = {"epoch": [], 
                        "ta": [], 
@@ -237,22 +243,23 @@ class CodeClassifierTrainerGPU(object):
                 self.best_val_acc = val_acc
                 self.test_acc_for_best_val = test_acc
                 self.save_model(epoch)
-
-            # If the loss is greater than the best loss (i.e., the current minimum loss)
-            if val_loss > best_val_loss:
-                # If we are past the warmup stage,
-                if epoch > warmup:
-                    # Lower the patience of how long to wait for the model accuracy to improve
-                    patience -= 1
+            
             # If our new loss is best,
-            else:
+            if val_loss <= (best_val_loss - self.earlyStopDelta):
                 # Update the best loss with the new loss
                 best_val_loss = val_loss
                 # Update the test loss corresponding to the best validation loss
                 self.test_loss_for_best_val = test_loss
                 # Reset the patience because the model improved
                 patience = self.patience
+            # If the loss is greater than the best loss (i.e., the current minimum loss)
+            else:
             # If we are out of training patience and past the warmup stage,
+                # If we are past the warmup stage,
+                if epoch > warmup:
+                    # Lower the patience of how long to wait for the model accuracy to improve
+                    patience -= 1
+            
             if patience == 0 and epoch > warmup:
                 break
 
@@ -568,7 +575,8 @@ class CodeClassifierTrainerGPU(object):
         model_save_file = os.path.join(path, "model_{}.pt".format(epoch))
         train_csv_path = "data/code_training_losses.csv"
 
-        print(path)
+        if self.verbose:
+            print(path)
         if not os.path.exists(path):
             os.makedirs(path)
 

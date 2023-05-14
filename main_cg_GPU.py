@@ -18,6 +18,8 @@ from datetime import datetime
 # Hyperparameter optimization
 import optuna
 from optuna.trial import TrialState
+# For checkpointing hyperparameter optimization
+import pickle
 
 # Objective function for Bayesian optimization with OpTuna
 def objective(trial,
@@ -52,6 +54,31 @@ def objective(trial,
     # Return this accuracy, which we rely on for the Bayesian loop
     return avgValAccuracy
 
+# Define a function that we can use to restart the optimization from the last trial.
+# This is useful if we try a high-throughput amount of trials and don't want to start over after a crash, for example
+def pruning_callback(study: optuna.study.Study, trial: optuna.trial.FrozenTrial) -> None:
+    study.set_user_attr('best_trial', study.best_trial)
+
+def checkpoint_study(study: optuna.study.Study,
+                     objectiveFunction = None,
+                     numTrials: int = None,
+                     checkpointEvery: int = 100,
+                     checkpointPath: str = None):
+    
+    for trial in range(numTrials):
+        # Optimize a single trial
+        study.optimize(objectiveFunction, n_trials=1)
+
+        # Checkpoint every checkpointEvery trials
+        if (trial + 1) % checkpointEvery == 0:
+            # Make a directory to save checkpoints if not exist
+            if not os.path.exists(checkpointPath):
+                os.makedirs(checkpointPath)
+            # Pickle the study to a file
+            ckptFile = f"ckpt_{trial + 1}.pkl"
+            with open(os.path.join(checkpointPath, ckptFile), 'wb') as fileObj:
+                pickle.dump(study, fileObj)
+    return study
 
 def load_data(folder_path, 
               verbose=True):
@@ -609,7 +636,6 @@ def classify_regions(pipeline_inputs: dict = None,
 
 
 def train_code_classifier(pipeline_inputs: dict = None,
-                          log=True,
                           timestamp: str = None,
                           hyperDict: dict = None):
     
@@ -872,9 +898,18 @@ if __name__ == "__main__":
             # By default, OpTuna objective functions for objective minimization/maximization does not accept custom input variables
             # However, we can easily accomodate custom input variables in this way with some lambda operations,
             objective_with_custom_input = lambda trial: objective(trial, pipeline_inputs)
-
-            # Optimize the study
-            study.optimize(objective_with_custom_input, n_trials=2, timeout=600)
+            
+            study = checkpoint_study(study,
+                     objective_with_custom_input,
+                     numTrials=pipeline_inputs["num_hpo"],
+                     checkpointEvery=pipeline_inputs["save_every"],
+                     checkpointPath=os.path.join(pipeline_inputs["checkpoint_path"], pipeline_inputs["timestamp"]))
+            
+            '''# Optimize the study
+            study.optimize(objective_with_custom_input, 
+                           n_trials=pipeline_inputs["num_hpo"], 
+                           timeout=pipeline_inputs["timeout"],
+                           callbacks=[pruning_callback])'''
 
             # Get the pruned trials (trials pruned prematurely)
             pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
