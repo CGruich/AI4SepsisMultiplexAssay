@@ -10,8 +10,7 @@ import os
 import argparse
 import csv
 import itertools
-import re
-import os.path as osp
+import re as regex
 from pathlib import Path
 import json
 from datetime import datetime
@@ -22,8 +21,7 @@ from optuna.trial import TrialState
 import pickle
 
 # Objective function for Bayesian optimization with OpTuna
-def objective(trial,
-              pipeline_inputs: dict = None):
+def objective(trial,  pipeline_inputs: dict = None):
     # Learning rate
     lr = trial.suggest_float("learning_rate", 1e-8, 1e-2)
     # Batch size
@@ -122,7 +120,7 @@ def load_code(code_folder_path,
     code_sample_folder = os.path.join(code_folder_path, "positive")
     data = []
     try:
-        codeDesignation = int(code_folder_path[-3:].strip("()"))
+        code_designation = int(code_folder_path[-3:].strip("()"))
     except:
         print("\n\nFAILURE OBTAINING DESIGNATED CODE LABEL FROM THE PARENT FOLDER PATH.\nThe parent folder name may not have been correctly labelled.")
 
@@ -135,7 +133,7 @@ def load_code(code_folder_path,
         region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
         try:
             label = int(file_name[0:2].strip("()"))
-            assert label == codeDesignation
+            assert label == code_designation
         except:
             print("\n\nFAILURE OBTAINING TARGET LABEL FROM SAMPLE FILENAMES.\nThe sample filenames may not have been correctly labelled.")
         # Append region and negative label to dataset.
@@ -149,97 +147,97 @@ def load_code(code_folder_path,
     # Return dataset for one code
     return data
 
-# Tests if an arbitrary string can be converted into an integer...
-# Helper function for explode
-def test_if_int(inputStr: str):
-    try:
-        return int(inputStr)
-    except:
-        return inputStr
+def sort_alphanumeric(string_list):
+    assert hasattr(string_list, 'sort'), "ERROR! TYPE {} DOES NOT HAVE A SORT FUNCTION".format(type(string_list))
+    """
+    Function to sort a list of strings in alphanumeric order.
+    Example: the list ['b1','a1','b2','a3','b3','a2'] will be sorted as ['a1', 'a2', 'a3', 'b1', 'b2', 'b3']
 
-# Defines a key for sorting a list of filenames.
-# e.g., ["File_1_Example.ext", "2_File_example.ext"] can be problematic to sort based on simple numerical sorting
-# Instead, we can use the built-in natural sorting library (like a human would sort) to sort the filenames
-# Example: "testFileName1.ext" gets converted to ["test", "FileName", "1", ".ext"]
-def natural_sort_key(inputStr):
-    # Handles integers and negative characters
-    return [test_if_int(character) for character in re.split('(-*[0-9]+)', inputStr)]
+    :param string_list: list of strings to sort.
+    """
+    sorting_key = lambda x: [int(c) if type(c) == int else c for c in regex.split('(-*[0-9]+)', x)]
+    string_list.sort(key=sorting_key)
 
-def find_mser_params(pipeline_inputs: dict = None):
-    if pipeline_inputs is not None:
-        raw_directory = pipeline_inputs["raw_directory"]
-        mser_save_directory = pipeline_inputs["mser_save_directory"]
-        code_list = pipeline_inputs["code_list"]
-        for code in code_list:
-            # The directory of all the raw images for a particular code (e.g., (1))
-            code_raw_directory = osp.join(raw_directory, "code " + code)
-            print(f"Examining Code {code}\n{code_raw_directory}")
-            
-            # Load
-            # Image naming convention: 1.tiff or (for a reference image) 1_ref.tiff
-            raw_imgs = [img for img in os.listdir(code_raw_directory) if osp.isfile(osp.join(code_raw_directory, img)) and "ref" not in img and "amp" not in img and "phase" not in img and "MSER" not in img]
-            reference_imgs = [img for img in os.listdir(code_raw_directory) if osp.isfile(osp.join(code_raw_directory, img)) and "ref" in img and "amp" not in img and "phase" not in img and "MSER" not in img]
-            # Image filenames will be loaded in parallel. e.g., "1.tiff" will be loaded with its' own reference image "1_ref.tiff"
-            # To do this, we need to guarantee that the filenames are sorted
-            raw_imgs.sort(key=natural_sort_key)
-            reference_imgs.sort(key=natural_sort_key)
+def find_mser_params(pipeline_inputs: dict):
 
-            print(f"Loading Raw Images:\n{raw_imgs}")
-            print(f"Loading Reference Images:\n{reference_imgs}")
+    raw_directory = pipeline_inputs["raw_directory"]
+    mser_save_directory = pipeline_inputs["mser_save_directory"]
+    code_list = pipeline_inputs["code_list"]
+    bit_depth = 16
+    for code in code_list:
+        # The directory of all the raw images for a particular code (e.g., (1))
+        code_raw_directory = os.path.join(raw_directory, "code " + code)
+        print(f"Examining Code {code}\n{code_raw_directory}")
 
-            # Ensure we have as many reference images as we do raw images
-            assert len(raw_imgs) == len(reference_imgs)
+        # Load
+        # Image naming convention: 1.tiff or (for a reference image) 1_ref.tiff
+        raw_img_names = []
+        reference_img_names = []
+        particle_position_names = []
+        for file_name in os.listdir(code_raw_directory):
+            if "amp" in file_name or "phase" in file_name or "MSER" in file_name:
+                continue
 
-            for imgInd in range(len(raw_imgs)):
-                raw_img = osp.join(code_raw_directory, raw_imgs[imgInd])
-                reference_img = osp.join(code_raw_directory, reference_imgs[imgInd])
-                saveDir = osp.join(code_raw_directory, raw_imgs[imgInd].replace(".tiff", "_MSER.json"))
-                print(f"Raw Image: {raw_img}")
-                print(f"Reference Image: {reference_img}\n")
+            if 'ref' in file_name:
+                reference_img_names.append(file_name)
+            elif "particle_positions" in file_name:
+                particle_position_names.append(file_name)
+            else:
+                raw_img_names.append(file_name)
 
-                assert Path(raw_img).is_file() and Path(reference_img).is_file()
+        # Image filenames will be loaded in parallel. e.g., "1.tiff" will be loaded with its own reference image "1_ref.tiff"
+        # Here we ensure the file names are sorted alphanumerically so each file name is paired with the appropriate reference
+        # and particle position list.
+        sort_alphanumeric(raw_img_names)
+        sort_alphanumeric(particle_position_names)
+        sort_alphanumeric(reference_img_names)
 
-                holograms = [cv2.imread(raw_img, cv2.IMREAD_ANYDEPTH)]
-                reference = cv2.imread(reference_img, cv2.IMREAD_ANYDEPTH)
-                grayscales = []
+        print(f"Loading Raw Images:\n{raw_img_names}")
+        print(f"Loading Reference Images:\n{reference_img_names}")
 
-                for hologram_image in holograms:
-                    hologram_image = hologram_image.astype(np.float32)
+        # Ensure we have as many reference images as we do raw images
+        assert len(raw_img_names) == len(reference_img_names)
 
-                    # Normalize hologram by reference image.
-                    normalized_hologram = hologram_image
-
-                    # Now we change its data-type to a matrix of 16-bit integers, which results in a standard grayscale image.
-                    grayscale_hologram = normalized_hologram.astype('uint16')
-                    grayscales.append(grayscale_hologram)
-
-                opt = MSEROptimizer(grayscales)
-                opt.num_iterations = pipeline_inputs["number_iterations"]
-                print(opt.num_iterations)
-                opt.train(saveDir=saveDir)
-                print(f"\nMSER Parameters Saved To:\n{saveDir}\n")
-    # Legacy Code
-    else:
-        srcImg = "/home/cameron/Dropbox (University of Michigan)/DL_training/data/sandbox_CG/raw/Gear_particle/code1/1.tiff"
-        referenceImg = "/home/cameron/Dropbox (University of Michigan)/DL_training/data/sandbox_CG/raw/Gear_particle/code1/1_ref.tiff"
-        assert Path(srcImg).is_file() and Path(referenceImg).is_file()
-
-        holograms = [cv2.imread(srcImg, cv2.IMREAD_ANYDEPTH)]
-        reference = cv2.imread(referenceImg, cv2.IMREAD_ANYDEPTH)
+        holograms = []
+        references = []
         grayscales = []
+        particle_locations = []
+        for i in range(len(raw_img_names)):
+            raw_img_path = os.path.join(code_raw_directory, raw_img_names[i])
+            reference_img_path = os.path.join(code_raw_directory, reference_img_names[i])
+            particle_location_path = os.path.join(code_raw_directory, particle_position_names[i])
 
-        for hologram_image in holograms:
+            print(f"Raw Image Path: {raw_img_path}")
+            print(f"Reference Image Path: {reference_img_path}\n")
+            print(f"Particle Locations Path: {particle_location_path}\n")
+
+            assert Path(raw_img_path).is_file() and Path(reference_img_path).is_file()
+
+            holograms.append(cv2.imread(raw_img_path, cv2.IMREAD_ANYDEPTH))
+            references.append(cv2.imread(reference_img_path, cv2.IMREAD_ANYDEPTH))
+
+            particle_locations_json = dict(json.load(particle_location_path))
+            particle_locations_list = list(particle_locations_json["particle_locations"])
+            particle_locations.append(particle_locations_list)
+
+        for hologram_image, reference_image in zip(holograms, references):
             hologram_image = hologram_image.astype(np.float32)
+            reference_image = reference_image.astype(np.float32)
 
             # Normalize hologram by reference image.
-            normalized_hologram = hologram_image
+            normalized_hologram = hologram_image / reference_image
 
-            # Now we change its data-type to a matrix of 16-bit integers, which results in a standard grayscale image.
-            grayscale_hologram = normalized_hologram.astype('uint16')
+            # Transform the normalized image into the appropriate bit-depth.
+            grayscale_hologram = (normalized_hologram * 2**bit_depth - 1).astype('uint{}'.format(bit_depth))
             grayscales.append(grayscale_hologram)
 
-        opt = MSEROptimizer(grayscales)
-        opt.train()
+        opt = MSEROptimizer(normalized_images=grayscales,
+                            particle_locations=particle_locations,
+                            num_iterations=pipeline_inputs["number_iterations"])
+
+        save_directory = os.path.join(code_raw_directory, "MSER_Parameters.json")
+        opt.train(save_directory=save_directory)
+        print(f"\nMSER Parameters Saved To:\n{save_directory}\n")
 
 
 def train_region_classifier(pipeline_inputs: dict = None, 
@@ -391,11 +389,11 @@ def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/
                 hpoID = counter
                 counter = counter + 1
             if crossVal:
-                dirHead, dirTail = osp.split(load_hpo_path)
-                crossValLossPath = osp.join(dirHead, "hpo_CVLoss_region_classifier.csv")
-                crossValAccPath = osp.join(dirHead, "hpo_CVAcc_region_classifier.csv")
-                testLossPath = osp.join(dirHead, "hpo_TestLoss_region_classifier.csv")
-                testAccPath = osp.join(dirHead, "hpo_TestAcc_region_classifier.csv")
+                dirHead, dirTail = os.path.split(load_hpo_path)
+                crossValLossPath = os.path.join(dirHead, "hpo_CVLoss_region_classifier.csv")
+                crossValAccPath = os.path.join(dirHead, "hpo_CVAcc_region_classifier.csv")
+                testLossPath = os.path.join(dirHead, "hpo_TestLoss_region_classifier.csv")
+                testAccPath = os.path.join(dirHead, "hpo_TestAcc_region_classifier.csv")
                 for key, value in scores.items():
                     if value == "ERR":
                         crossValLossDF.loc[len(crossValLossDF)] = writeRow
@@ -439,7 +437,7 @@ def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/
             crossValAccDF = pd.DataFrame(columns=cvAccColumns)
         
         # Load hyperparameter trials from "./hpo" folder
-        hpoFilePath = osp.join(load_hpo_path, "hpo_trials_region_classifier.csv")
+        hpoFilePath = os.path.join(load_hpo_path, "hpo_trials_region_classifier.csv")
         hpoDF = pd.read_csv(hpoFilePath)
         print(hpoDF)
 
@@ -465,8 +463,8 @@ def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/
                 hpoID = counter
                 counter = counter + 1
             if crossVal:
-                crossValLossPath = osp.join(load_hpo_path, "hpo_Loss_region_classifier.csv")
-                crossValAccPath = osp.join(load_hpo_path, "hpo_Acc_region_classifier.csv")
+                crossValLossPath = os.path.join(load_hpo_path, "hpo_Loss_region_classifier.csv")
+                crossValAccPath = os.path.join(load_hpo_path, "hpo_Acc_region_classifier.csv")
                 for key, value in scores.items():
                     if value == "ERR":
                         crossValLossDF.loc[len(crossValLossDF)] = writeRow
@@ -500,11 +498,11 @@ def classify_regions(pipeline_inputs: dict = None,
         # For each code to process
         for codeNum in tqdm(code_list):
             # Get the raw image directory for that code
-            raw_code_dir = osp.join(raw_directory, "code " + codeNum)
+            raw_code_dir = os.path.join(raw_directory, "code " + codeNum)
             # Define positive/negative sample save paths
-            posSaveDir = osp.join("data/classifier_training_samples/", "code " + codeNum, "positive")
-            negSaveDir = osp.join("data/classifier_training_samples/", "code " + codeNum, "negative")
-            if not osp.exists(posSaveDir):
+            posSaveDir = os.path.join("data/classifier_training_samples/", "code " + codeNum, "positive")
+            negSaveDir = os.path.join("data/classifier_training_samples/", "code " + codeNum, "negative")
+            if not os.path.exists(posSaveDir):
                 os.makedirs(posSaveDir)
                 os.makedirs(negSaveDir)
             print(f"Processing and saving data to:\n{posSaveDir}")
@@ -520,7 +518,7 @@ def classify_regions(pipeline_inputs: dict = None,
                 sum_pos = 0
                 sum_neg = 0
                 raw_image_id = MSERFile.rstrip("_MSER.json")
-                with open(osp.join(raw_code_dir, MSERFile), "r") as MSERObj:
+                with open(os.path.join(raw_code_dir, MSERFile), "r") as MSERObj:
                     MSERDict = json.load(MSERObj)["optimizer.max"]["params"]
                 # Define a region detector for positive/negative division of samples
                 # This region detector is not optimized to be the most accurate
@@ -537,7 +535,7 @@ def classify_regions(pipeline_inputs: dict = None,
                 # If the file is a reference image,
                 elif "ref" in refname:
                     # Load reference
-                    reference = cv2.imread(osp.join(raw_code_dir, refname), cv2.IMREAD_ANYDEPTH)
+                    reference = cv2.imread(os.path.join(raw_code_dir, refname), cv2.IMREAD_ANYDEPTH)
                     # For each image in the raw image directory of a particular code
                     for imname in filenames:
                         # The raw image file is just the name of the reference file without the reference designation
@@ -650,7 +648,7 @@ def train_code_classifier(pipeline_inputs: dict = None,
         trainer = CodeClassifierTrainerGPU(codes, model_save_path=pipeline_inputs["model_save_parent_directory"])
         codeDataComposite = []
         for code in codes:
-            codePath = osp.join(pipeline_inputs["sample_parent_directory"], "code " + code)
+            codePath = os.path.join(pipeline_inputs["sample_parent_directory"], "code " + code)
             codeData = load_code(code_folder_path=codePath)
             codeDataComposite = codeDataComposite + codeData
         
@@ -887,6 +885,7 @@ if __name__ == "__main__":
             train_code_classifier()
         else:
             train_code_classifier(pipeline_inputs=pipeline_inputs)
+
     elif action == "bayesian_optimize":
         # Currently only implemented for the Jupyter notebook pipeline,
         if pipeline_inputs is not None:
