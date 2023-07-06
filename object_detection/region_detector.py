@@ -22,7 +22,7 @@ class RegionDetector(object):
             # Code_1_Ref1
             self.MSER_parameters = (1, 547, 1881, 1, 0.81046, 717, 794, 0.09432, 39)
             # Old square particle parameters
-            #self.MSER_parameters = (2, 722, 2233, 0.12414432810011933, 0.08659125698030035, 982, 441, 0.5634645997926272, 9)
+            # self.MSER_parameters = (2, 722, 2233, 0.12414432810011933, 0.08659125698030035, 982, 441, 0.5634645997926272, 9)
             # Initial guess
             # self.MSER_parameters = (3, 500, 2500, 1.0, 0.0, 792, 403, 0.6771866102789077, 564)
 
@@ -46,8 +46,6 @@ class RegionDetector(object):
 
         normalized_hologram *= np.power(2, 16) - 1
         normalized_hologram = np.clip(normalized_hologram, 0, np.power(2, 16) - 1)
-        # The maximum pixel value of the normalized hologram is 1, so we will multiply it by 2^16 - 1 to put the image
-        # into the range of pixel values for a 16-bit grayscale image.
 
         # Now we change its data-type to a matrix of 16-bit integers, which results in a standard grayscale image.
         grayscale_hologram = normalized_hologram.astype('uint16')
@@ -83,7 +81,7 @@ class RegionDetector(object):
         normalized_hologram = np.clip(normalized_hologram, 0, np.power(2, 16) - 1)
         grayscale_hologram = normalized_hologram.astype('uint16')
 
-       # Pass our newly normalized image to MSER for blob detection.
+        # Pass our newly normalized image to MSER for blob detection.
         detected_blobs, rects = self.mser_detect_blobs(grayscale_hologram,
                                                 draw_blobs=save_img_name is not None,
                                                 save_img_name=save_img_name)
@@ -189,17 +187,19 @@ class RegionDetector(object):
             min_rotated_rects = [cv2.minAreaRect(blob) for blob in passed_contours]
 
             rects = [cv2.boxPoints(rect).astype(np.int32) for rect in min_rotated_rects]
-
+            print("detected", len(rects), "blobs")
             for r in rects:
-                cv2.drawContours(vis,[r],0,(0,0,65000), 1)
+                cv2.drawContours(vis,[r],0,(0,0,65000), 2)
 
-            cv2.imshow("vis",grayscale_hologram)
+            cv2.namedWindow("vis")
+            cv2.imshow("vis",cv2.resize(vis, (1920, 1080)))
+            cv2.moveWindow("vis", 0, 0)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
             if save_img_name is None:
                 save_img_name = "data/test/MSER Hulls.png"
-            cv2.imwrite(save_img_name, vis, )
+            cv2.imwrite(save_img_name, vis)
 
             return blobs, rects
         return blobs

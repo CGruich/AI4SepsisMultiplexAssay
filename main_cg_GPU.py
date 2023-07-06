@@ -161,7 +161,6 @@ def sort_alphanumeric(string_list):
 
 def find_mser_params(pipeline_inputs: dict):
     raw_directory = pipeline_inputs["raw_directory"]
-    mser_save_directory = pipeline_inputs["mser_save_directory"]
     code_list = pipeline_inputs["code_list"]
     bit_depth = 16
     conv_window_size = 10
@@ -176,7 +175,7 @@ def find_mser_params(pipeline_inputs: dict):
         # Image naming convention: 1.tiff or (for a reference image) 1_ref.tiff
         raw_img_names = []
         reference_img_names = []
-        particle_position_names = []
+        particle_location_names = []
         for file_name in os.listdir(code_raw_directory):
             if "amp" in file_name or "phase" in file_name or "MSER" in file_name:
                 continue
@@ -184,7 +183,7 @@ def find_mser_params(pipeline_inputs: dict):
             if 'ref' in file_name:
                 reference_img_names.append(file_name)
             elif "particle_locations" in file_name:
-                particle_position_names.append(file_name)
+                particle_location_names.append(file_name)
             else:
                 raw_img_names.append(file_name)
 
@@ -192,11 +191,12 @@ def find_mser_params(pipeline_inputs: dict):
         # Here we ensure the file names are sorted alphanumerically so each file name is paired with the appropriate reference
         # and particle position list.
         sort_alphanumeric(raw_img_names)
-        sort_alphanumeric(particle_position_names)
+        sort_alphanumeric(particle_location_names)
         sort_alphanumeric(reference_img_names)
 
         print(f"Loading Raw Images:\n{raw_img_names}")
         print(f"Loading Reference Images:\n{reference_img_names}")
+        print(f"Loading Particle Locations:\n{particle_location_names}")
 
         # Ensure we have as many reference images as we do raw images
         assert len(raw_img_names) == len(reference_img_names)
@@ -208,7 +208,7 @@ def find_mser_params(pipeline_inputs: dict):
         for i in range(len(raw_img_names)):
             raw_img_path = os.path.join(code_raw_directory, raw_img_names[i])
             reference_img_path = os.path.join(code_raw_directory, reference_img_names[i])
-            particle_location_path = os.path.join(code_raw_directory, particle_position_names[i])
+            particle_location_path = os.path.join(code_raw_directory, particle_location_names[i])
 
             print(f"Raw Image Path: {raw_img_path}")
             print(f"Reference Image Path: {reference_img_path}")
@@ -237,17 +237,11 @@ def find_mser_params(pipeline_inputs: dict):
 
             # Normalize hologram by reference image.
             normalized_hologram = hologram_image / averaged_reference_image
-            cv2.imshow("norm", normalized_hologram)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
 
 
             # Transform the normalized image into the appropriate bit-depth.
             grayscale_hologram = normalized_hologram * 2**16
             grayscale_hologram = grayscale_hologram.clip(0, 2**16-1).astype('uint{}'.format(bit_depth))
-            cv2.imshow("gray", grayscale_hologram)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
             grayscales.append(grayscale_hologram)
 
         opt = MSEROptimizer(normalized_images=grayscales,
@@ -257,7 +251,8 @@ def find_mser_params(pipeline_inputs: dict):
         save_directory = os.path.join(code_raw_directory, "MSER_Parameters.json")
         opt.train(save_directory=save_directory)
         print(f"\nMSER Parameters Saved To:\n{save_directory}\n")
-        
+
+
 def train_region_classifier(pipeline_inputs: dict = None, 
                             load_data_path="data/classifier_training_samples", 
                             model_save_path="data/models/region", 

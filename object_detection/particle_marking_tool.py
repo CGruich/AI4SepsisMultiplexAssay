@@ -28,7 +28,7 @@ class ParticleMarkingTool(object):
             img = cv2.resize(img, self.display_window_size)
             new_h, new_w = img.shape
             self.window_size_transform = [new_w / w, new_h / h]
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
 
             self.current_image = img
             if current_file_name in existing_files:
@@ -85,10 +85,10 @@ class ParticleMarkingTool(object):
 
         render_image = self.current_image.copy()
         for coords in self.circles_to_render:
-            cv2.circle(render_image, coords, 7, (0, 255, 0), -1)
+            cv2.circle(render_image, coords, 7, (0, 65000, 0), -1)
         cv2.imshow("image", render_image)
 
 if __name__ == "__main__":
-    folder_path = "C:/Users/jane/Desktop/particle_location_jsons"
+    folder_path = "C:/Users/jane/Desktop/particle_location_jsons/code 1"
     tool = ParticleMarkingTool()
     tool.mark_particles(folder_path)
