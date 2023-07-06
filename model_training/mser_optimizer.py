@@ -18,8 +18,8 @@ class MSEROptimizer(object):
                 self.images[i] = img
 
         self.detector = RegionDetector(None)
-        self.max_area = 4200
-        self.min_area = 3500
+        self.max_area = 10000
+        self.min_area = 3000
         self.best_score = -np.inf
         self.save_filename = None
         self.num_iterations = num_iterations
@@ -40,7 +40,7 @@ class MSEROptimizer(object):
             "edge_blur_size": (0, 1000)}
 
         optimizer = bayes_opt.BayesianOptimization(self.evaluate, ranges, verbose=1)
-        optimizer.maximize(init_points=100, n_iter=self.num_iterations)
+        optimizer.maximize(init_points=20, n_iter=self.num_iterations)
         
         if self.save_filename is not None:
             saveDict = {"optimizer.max": optimizer.max}

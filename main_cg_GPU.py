@@ -17,6 +17,7 @@ from datetime import datetime
 # Hyperparameter optimization
 import optuna
 from optuna.trial import TrialState
+from scipy.signal import convolve2d
 # For checkpointing hyperparameter optimization
 import pickle
 
@@ -159,11 +160,13 @@ def sort_alphanumeric(string_list):
     string_list.sort(key=sorting_key)
 
 def find_mser_params(pipeline_inputs: dict):
-
     raw_directory = pipeline_inputs["raw_directory"]
     mser_save_directory = pipeline_inputs["mser_save_directory"]
     code_list = pipeline_inputs["code_list"]
     bit_depth = 16
+    conv_window_size = 10
+    convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (conv_window_size * conv_window_size)
+
     for code in code_list:
         # The directory of all the raw images for a particular code (e.g., (1))
         code_raw_directory = os.path.join(raw_directory, "code " + code)
@@ -180,7 +183,7 @@ def find_mser_params(pipeline_inputs: dict):
 
             if 'ref' in file_name:
                 reference_img_names.append(file_name)
-            elif "particle_positions" in file_name:
+            elif "particle_locations" in file_name:
                 particle_position_names.append(file_name)
             else:
                 raw_img_names.append(file_name)
@@ -208,7 +211,7 @@ def find_mser_params(pipeline_inputs: dict):
             particle_location_path = os.path.join(code_raw_directory, particle_position_names[i])
 
             print(f"Raw Image Path: {raw_img_path}")
-            print(f"Reference Image Path: {reference_img_path}\n")
+            print(f"Reference Image Path: {reference_img_path}")
             print(f"Particle Locations Path: {particle_location_path}\n")
 
             assert Path(raw_img_path).is_file() and Path(reference_img_path).is_file()
@@ -216,19 +219,35 @@ def find_mser_params(pipeline_inputs: dict):
             holograms.append(cv2.imread(raw_img_path, cv2.IMREAD_ANYDEPTH))
             references.append(cv2.imread(reference_img_path, cv2.IMREAD_ANYDEPTH))
 
-            particle_locations_json = dict(json.load(particle_location_path))
+            with open(particle_location_path, 'r') as particle_file:
+                particle_locations_json = dict(json.load(particle_file))
             particle_locations_list = list(particle_locations_json["particle_locations"])
             particle_locations.append(particle_locations_list)
+
 
         for hologram_image, reference_image in zip(holograms, references):
             hologram_image = hologram_image.astype(np.float32)
             reference_image = reference_image.astype(np.float32)
 
+            # For each pixel in the reference, we will construct a square with side lengths `conv_window_size` centered
+            # at the current pixel. Then, we will compute the average value of every pixel in side this square, and set
+            # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
+            # image to use for normalization.
+            averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
+
             # Normalize hologram by reference image.
-            normalized_hologram = hologram_image / reference_image
+            normalized_hologram = hologram_image / averaged_reference_image
+            cv2.imshow("norm", normalized_hologram)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
 
             # Transform the normalized image into the appropriate bit-depth.
-            grayscale_hologram = (normalized_hologram * 2**bit_depth - 1).astype('uint{}'.format(bit_depth))
+            grayscale_hologram = normalized_hologram * 2**16
+            grayscale_hologram = grayscale_hologram.clip(0, 2**16-1).astype('uint{}'.format(bit_depth))
+            cv2.imshow("gray", grayscale_hologram)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
             grayscales.append(grayscale_hologram)
 
         opt = MSEROptimizer(normalized_images=grayscales,
@@ -238,8 +257,7 @@ def find_mser_params(pipeline_inputs: dict):
         save_directory = os.path.join(code_raw_directory, "MSER_Parameters.json")
         opt.train(save_directory=save_directory)
         print(f"\nMSER Parameters Saved To:\n{save_directory}\n")
-
-
+        
 def train_region_classifier(pipeline_inputs: dict = None, 
                             load_data_path="data/classifier_training_samples", 
                             model_save_path="data/models/region", 
@@ -833,36 +851,32 @@ if __name__ == "__main__":
 
     # print("Fds")
     args = parser.parse_args()
-    action = args.action
-    dir = args.dir
-    reg_path = args.reg_path
-    code_path = args.code_path
-    pipeline_inputs = args.pipeline_inputs
+    # action = args.action
+    # dir = args.dir
+    # reg_path = args.reg_path
+    # code_path = args.code_path
+    # pipeline_inputs = args.pipeline_inputs
+
+    action = "find_mser_params"
+    pipeline_inputs = {
+                       "number_iterations":1000,
+                       "raw_directory":"C:/Users/jane/Desktop/particle_location_jsons",
+                       "mser_save_directory":"C:/Users/jane/Desktop/particle_location_jsons/mser_hyperparameters",
+                       "code_list":["1"]
+                       }
 
     # Controls the functionality of the pipeline Jupter notebooks
     # -----------------------------------------------------------------
-    if args.pipeline_inputs is not None:
-        # Loads the inputs to the pipeline if specified
-        with open(pipeline_inputs, "r") as inputFile:
-            pipeline_inputs = json.load(inputFile)
-    else:
-        # If not specified, the code runs in an off-rails fashion without the jupyter notebooks
-        # It can run, but a lot of manual intervention is required
-        pipeline_inputs = None
+    # if args.pipeline_inputs is not None:
+    #     # Loads the inputs to the pipeline if specified
+    #     with open(pipeline_inputs, "r") as inputFile:
+    #         pipeline_inputs = json.load(inputFile)
     # ------------------------------------------------------------------
     
     if action == 'find_mser_params':
-        if pipeline_inputs is None:
-            # Legacy Code
-            find_mser_params()
-        else:
             find_mser_params(pipeline_inputs=pipeline_inputs)
     
     elif action == 'train_region_classifier':
-        if pipeline_inputs is None:
-            # Legacy Code
-            train_region_classifier()
-        else:
             train_region_classifier(pipeline_inputs=pipeline_inputs)
     
     elif action == 'hpo_region_classifier':

@@ -151,7 +151,7 @@ class RegionDetector(object):
         # to an 8-bit grayscale image here.
         if grayscale_hologram.dtype == 'uint16':
             # 2^16 / 2^8 = 2^8
-            img = np.divide(grayscale_hologram, 256)
+            img = np.divide(grayscale_hologram.astype(np.float32), 256)
             img = img.astype('uint8')
         else:
             img = grayscale_hologram
@@ -167,14 +167,14 @@ class RegionDetector(object):
         blobs_to_keep = []
         for i in range(len(dims)):
             w, h = dims[i]
-            if 0.9 < w / h < 1.1:
+            if 0.8 < w / h < 1.2:
                 blobs_to_keep.append(blobs[i])
 
         blobs = blobs_to_keep
         # Optionally draw the hulls on a display image.
         if draw_blobs:
             # Copy of input hologram for display purposes.
-            vis = grayscale_hologram.copy()
+            vis = grayscale_hologram.copy().astype(np.float32)
 
             # Convert the copy to 8-bit.
             vis = np.divide(vis, 256)
@@ -193,9 +193,13 @@ class RegionDetector(object):
             for r in rects:
                 cv2.drawContours(vis,[r],0,(0,0,65000), 1)
 
+            cv2.imshow("vis",grayscale_hologram)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
             if save_img_name is None:
                 save_img_name = "data/test/MSER Hulls.png"
-            cv2.imwrite(save_img_name, vis)
+            cv2.imwrite(save_img_name, vis, )
 
             return blobs, rects
         return blobs
