@@ -166,13 +166,7 @@ class CodeClassifierTrainer(object):
             #     tf = transforms.RandomAdjustSharpness(sharpness_factor=np.random.uniform(0, 10))
             #     samples = tf(samples)
 
-            factors = []
-            for j in range(len(samples)):
-                max_factor = 65535./torch.max(samples[j])
-                min_factor = 0.5
-                factors.append(np.random.uniform(min_factor, max_factor))
 
-            samples *= np.asarray(factors).astype(np.float32).reshape(-1, 1, 1, 1)
             labels = torch.as_tensor(labels, dtype=torch.float32)
 
             batches.append((samples, labels))

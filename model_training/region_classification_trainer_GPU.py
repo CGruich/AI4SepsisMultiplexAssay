@@ -13,13 +13,15 @@ from datetime import datetime
 class RegionClassifierTrainerGPU(object):
     def __init__(self, 
                  model_save_path: str = "data/models/region", 
-                 hpoTrial = None, 
+                 hpo_trial = None, 
                  verbose: bool = True, 
                  log: bool = True, 
                  timestamp: str = datetime.now().strftime("%m_%d_%y_%H:%M"), 
                  k: int = None):
         # Printing verbosity
         self.verbose = verbose
+        self.test_loss_for_best_val = None
+        self.test_data = None
 
         # CG: CPU or GPU, prioritizes GPU if available.
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -34,6 +36,7 @@ class RegionClassifierTrainerGPU(object):
 
         self.model_save_path = model_save_path
         self.save_every_n = 10
+        self.test_acc_for_best_val = 0
         
         self.log_timestamp = timestamp
 
@@ -60,11 +63,11 @@ class RegionClassifierTrainerGPU(object):
         self.hpo = False
 
         # Specific hyperparameter trial to test if hyperparameter optimizing
-        self.hpoTrial = hpoTrial
+        self.hpo_trial = hpo_trial
 
         # If running grid search hyperparameter optimization,
-        if self.hpoTrial is not None:
-            for key, value in self.hpoTrial.items():
+        if self.hpo_trial is not None:
+            for key, value in self.hpo_trial.items():
                 if key == "Batch_Size":
                     self.batch_size = value
                 elif key == "lr":
@@ -100,17 +103,21 @@ class RegionClassifierTrainerGPU(object):
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(self.beta1, 0.999), eps=self.epsilon)
 
         if self.log:
-            if self.hpoTrial is not None:
+            if self.hpo_trial is not None:
                 self.writer = SummaryWriter(self.hpoLogPath)
             else:
                 self.writer = SummaryWriter(os.path.join(self.model_save_path, self.log_timestamp, "logs"))
 
-    def train(self, crossVal=False, crossValScores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}):
+    def train(self, cross_validate=False, cross_val_scores=None):
         """
         Function to train a classifier on hologram regions.
         :return: None.
         """
 
+        # Mutable default values should not be defined in the function parameter list.
+        if cross_val_scores is None:
+            cross_val_scores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
+        
         # Set the PyTorch model to training mode.
         self.model.train()
 
@@ -124,7 +131,7 @@ class RegionClassifierTrainerGPU(object):
         log = self.log
 
         writer = self.writer
-        hpoTrial = self.hpoTrial
+        hpo_trial = self.hpo_trial
         verbose = self.verbose
         best_val_loss = np.inf
         self.test_loss_for_best_val = np.inf
@@ -189,7 +196,7 @@ class RegionClassifierTrainerGPU(object):
                     print("NEW BEST VAL. ACCURACY", val_acc, epoch)
                 self.best_val_acc = val_acc
                 self.test_acc_for_best_val = test_acc
-                if hpoTrial is None:
+                if hpo_trial is None:
                     self.save_model(epoch)
 
             if val_loss > best_val_loss:
@@ -202,18 +209,18 @@ class RegionClassifierTrainerGPU(object):
             if patience == 0 and epoch > warmup:
                 break
 
-            if epoch % self.save_every_n == 0 and hpoTrial is None:
+            if epoch % self.save_every_n == 0 and hpo_trial is None:
                 self.save_model(epoch)
         # Save changes to hard drive and close tensorboard writer in memory.
         writer.flush()
         writer.close()
         
-        if crossVal:
-            crossValScores["Val_Loss"].append(best_val_loss)
-            crossValScores["Val_Acc"].append(self.best_val_acc)
-            crossValScores["Test_Loss"].append(self.test_loss_for_best_val)
-            crossValScores["Test_Acc"].append(self.test_acc_for_best_val)
-            return crossValScores
+        if cross_validate:
+            cross_val_scores["Val_Loss"].append(best_val_loss)
+            cross_val_scores["Val_Acc"].append(self.best_val_acc)
+            cross_val_scores["Test_Loss"].append(self.test_loss_for_best_val)
+            cross_val_scores["Test_Acc"].append(self.test_acc_for_best_val)
+            return cross_val_scores
 
     def generate_batches(self, data):
         """
@@ -361,18 +368,18 @@ class RegionClassifierTrainerGPU(object):
         return acc.item()
 
     def load_data(self, folder_path: str, 
-                  datasetNP, 
+                  dataset_np, 
                   train_idx = None, 
                   val_idx = None, 
                   test_dataset: np.ndarray = None):
-        if self.hpoTrial is not None:
+        if self.hpo_trial is not None:
             # Ensuring a train/val/test split during hyperparameter optimization
             assert train_idx is not None
             assert val_idx is not None
             assert test_dataset is not None
 
-            self.train_data = np.take(datasetNP, train_idx, axis=0)
-            val_data = np.take(datasetNP, val_idx, axis=0)
+            self.train_data = np.take(dataset_np, train_idx, axis=0)
+            val_data = np.take(dataset_np, val_idx, axis=0)
 
             # Setting up validation dataset
             v_labels = []

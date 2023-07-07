@@ -17,9 +17,9 @@ from datetime import datetime
 # Hyperparameter optimization
 import optuna
 from optuna.trial import TrialState
-from scipy.signal import convolve2d
 # For checkpointing hyperparameter optimization
 import pickle
+from utils import helper_functions
 
 # Objective function for Bayesian optimization with OpTuna
 def objective(trial,  pipeline_inputs: dict = None):
@@ -35,7 +35,7 @@ def objective(trial,  pipeline_inputs: dict = None):
     dr = trial.suggest_float("dropout_rate", 0.0, 0.8)
 
     # Dictionary of hyperparameters
-    hyperDict = {"lr": lr, 
+    hyper_dict = {"lr": lr, 
                  "bs": bs, 
                  "fcSize": fcSize, 
                  "fcNum": fcNum, 
@@ -43,36 +43,36 @@ def objective(trial,  pipeline_inputs: dict = None):
     
     # Run stratified k-fold cross-validation with the hyperparameters
     # Via the pipeline functionality of the workflow,
-    crossValScores = train_code_classifier(pipeline_inputs=pipeline_inputs,
+    cross_val_scores = train_code_classifier(pipeline_inputs=pipeline_inputs,
                           timestamp=None,
-                          hyperDict=hyperDict)
+                          hyper_dict=hyper_dict)
     
     # Average stratified k-fold cross-validation accuracy
-    avgValAccuracy = np.array(crossValScores["Val_Acc"]).mean()
+    avg_val_accuracy = np.array(cross_val_scores["Val_Acc"]).mean()
 
     # Return this accuracy, which we rely on for the Bayesian loop
-    return avgValAccuracy
+    return avg_val_accuracy
 
 # Define a function that we can use to restart the optimization from the last trial.
 # This is useful if we try a high-throughput amount of trials and don't want to start over after a crash, for example
 def checkpoint_study(study: optuna.study.Study,
-                     objectiveFunction = None,
-                     numTrials: int = None,
-                     checkpointEvery: int = 100,
-                     checkpointPath: str = None):
+                     objective_function = None,
+                     num_trials: int = None,
+                     checkpoint_every: int = 100,
+                     checkpoint_path: str = None):
     
-    for trial in range(numTrials):
+    for trial in range(num_trials):
         # Optimize a single trial
-        study.optimize(objectiveFunction, n_trials=1)
+        study.optimize(objective_function, n_trials=1)
 
-        # Checkpoint every checkpointEvery trials
-        if (trial + 1) % checkpointEvery == 0:
+        # Checkpoint every checkpoint_every trials
+        if (trial + 1) % checkpoint_every == 0:
             # Make a directory to save checkpoints if not exist
-            if not os.path.exists(checkpointPath):
-                os.makedirs(checkpointPath)
+            if not os.path.exists(checkpoint_path):
+                os.makedirs(checkpoint_path)
             # Pickle the study to a file
             ckptFile = f"ckpt_{trial + 1}.pkl"
-            with open(os.path.join(checkpointPath, ckptFile), 'wb') as fileObj:
+            with open(os.path.join(checkpoint_path, ckptFile), 'wb') as fileObj:
                 pickle.dump(study, fileObj)
     return study
 
@@ -226,22 +226,7 @@ def find_mser_params(pipeline_inputs: dict):
 
 
         for hologram_image, reference_image in zip(holograms, references):
-            hologram_image = hologram_image.astype(np.float32)
-            reference_image = reference_image.astype(np.float32)
-
-            # For each pixel in the reference, we will construct a square with side lengths `conv_window_size` centered
-            # at the current pixel. Then, we will compute the average value of every pixel in side this square, and set
-            # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
-            # image to use for normalization.
-            averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
-
-            # Normalize hologram by reference image.
-            normalized_hologram = hologram_image / averaged_reference_image
-
-
-            # Transform the normalized image into the appropriate bit-depth.
-            grayscale_hologram = normalized_hologram * 2**16
-            grayscale_hologram = grayscale_hologram.clip(0, 2**16-1).astype('uint{}'.format(bit_depth))
+            grayscale_hologram = helper_functions.normalize_by_reference(hologram_image, reference_image)
             grayscales.append(grayscale_hologram)
 
         opt = MSEROptimizer(normalized_images=grayscales,
@@ -256,10 +241,10 @@ def find_mser_params(pipeline_inputs: dict):
 def train_region_classifier(pipeline_inputs: dict = None, 
                             load_data_path="data/classifier_training_samples", 
                             model_save_path="data/models/region", 
-                            crossVal=False, 
+                            cross_validate=False, 
                             k=5, 
-                            hpoTrial=None, 
-                            randomState=100, 
+                            hpo_trial=None, 
+                            random_state=100, 
                             verbose=True, 
                             log=True, 
                             timestamp: str = None):
@@ -271,69 +256,68 @@ def train_region_classifier(pipeline_inputs: dict = None,
     # data/classifier_training_samples/negative
     
     # Returns list of lists
-    dataList = load_data(load_data_path, verbose=verbose)
+    data_list = load_data(load_data_path, verbose=verbose)
     # Based on the format of the return result of .load_data(),
     # Extract all the targets of the training samples
-    targets = np.array(list(zip(*dataList))[-1])
+    targets = np.array(list(zip(*data_list))[-1])
     # All the samples
     dataset = np.asarray(load_data(load_data_path, verbose=verbose), dtype=object)
 
     # Do a stratified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
-    trainDataset, testDataset = train_test_split(dataset, test_size=0.20, stratify=targets)
-    trainTargets = np.asarray(list(zip(*trainDataset))[-1])
+    training_data, validation_data = train_test_split(dataset, test_size=0.20, stratify=targets)
+    training_targets = np.asarray(list(zip(*training_data))[-1])
     
     # CG: Stratified k-Fold cross-validation
-    if crossVal:
-        cvColumns = ["cv" + str(fold) for fold in range(1, k + 1)]
+    if cross_validate:
         # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
-        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=randomState)
+        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state)
         
-        trainDataset_idx = np.arange(len(trainDataset))
-        crossValScores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
-        foldInd = 1
+        training_data_idx = np.arange(len(training_data))
+        cross_val_scores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
+        fold_index = 1
         # For each fold, define training data indices and validation data indices from the input training dataset
-        for fold, (train_idx, val_idx) in enumerate(splits.split(trainDataset_idx, y=trainTargets)):
+        for fold, (train_idx, val_idx) in enumerate(splits.split(training_data_idx, y=training_targets)):
             if verbose:
                 print('\n\nFold {}'.format(fold + 1))
             # Define a region classifier
             trainer = RegionClassifierTrainerGPU(model_save_path=model_save_path, 
-                                                 hpoTrial=hpoTrial, 
+                                                 hpo_trial=hpo_trial,
                                                  verbose=verbose, 
                                                  log=log, 
                                                  timestamp=timestamp, 
-                                                 k=foldInd)
+                                                 k=fold_index)
             trainer.load_data(load_data_path, 
-                              trainDataset, 
+                              training_data, 
                               train_idx, 
                               val_idx, 
-                              test_dataset=testDataset)
+                              test_dataset=validation_data)
             # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
-            crossValScores = trainer.train(crossVal=crossVal, crossValScores=crossValScores)
+            cross_val_scores = trainer.train(cross_validate=cross_validate, cross_val_scores=cross_val_scores)
             # Keep track of what k-fold we are on for book-keeping
-            foldInd = foldInd + 1
+            fold_index = fold_index + 1
         
         if verbose:
             print("\nTRAINING COMPLETE.\nCross-Validation Dictionary:")
-            print(crossValScores)
+            print(cross_val_scores)
             # Average cross-validation scores
-            for key, value in crossValScores.items():
+            for key, value in cross_val_scores.items():
                 print("Avg. " + str(key) + ": " + str(np.array(value).mean()))
-        return crossValScores 
+        return cross_val_scores 
     # If not cross-validating,
     else:
-        trainer = RegionClassifierTrainerGPU(model_save_path=model_save_path, hpoTrial=hpoTrial, verbose=verbose, log=log)
+        trainer = RegionClassifierTrainerGPU(model_save_path=model_save_path, hpo_trial=hpo_trial, verbose=verbose, log=log)
         trainer.load_data(load_data_path, dataset, train_idx=None, val_idx=None)
-        trainer.train(crossVal=crossVal, crossValScores=None)
+        trainer.train(cross_validate=False, cross_val_scores=None)
 
-def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/home/cameron/Dropbox (University of Michigan)/DL_training/hpo/region_classifier_grid_search", load_data_path="data/classifier_training_samples", model_save_path="data/models/region", crossVal=True, k=5, randomState=100, verbose=False, save_every=50):
+def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/home/cameron/Dropbox (University of Michigan)/DL_training/hpo/region_classifier_grid_search", load_data_path="data/classifier_training_samples", model_save_path="data/models/region", cross_validation=True, k=5, random_state=100, verbose=False, save_every=50):
     if pipeline_inputs is not None:
         load_hpo_path = pipeline_inputs.get("grid_search_hpo", None).get("hpo_file", None)
         load_data_path = pipeline_inputs.get("sample_parent_directory", None)
         model_save_path = pipeline_inputs.get("model_save_parent_directory", None)
-        crossVal = pipeline_inputs.get("strat_kfold", None).get("activate", None)
+        cross_validation = pipeline_inputs.get("strat_kfold", None).get("activate", None)
         k = pipeline_inputs.get("strat_kfold", None).get("num_folds", None)
-        randomState = pipeline_inputs.get("strat_kfold", None).get("random_state", None)
+        random_state = pipeline_inputs.get("strat_kfold", None).get("random_state", None)
         save_every = pipeline_inputs.get("grid_search_hpo", None).get("save_every", None)
         log = pipeline_inputs.get("grid_search_hpo", None).get("log", None)
         verbose = pipeline_inputs.get("grid_search_hpo", None).get("verbose", None)
@@ -343,33 +327,33 @@ def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/
         assert load_hpo_path is not None and type(load_hpo_path) is str and ".csv" in load_hpo_path
         assert load_data_path is not None and type(load_data_path) is str
         assert model_save_path is not None and type(model_save_path) is str
-        assert crossVal is not None and type(crossVal) is bool
+        assert cross_validation is not None and type(cross_validation) is bool
         assert k is not None and type(k) is int and k >= 1
-        assert randomState is not None and type(randomState) is int
+        assert random_state is not None and type(random_state) is int
         assert save_every is not None and type(save_every) is int and save_every >= 1
         assert log is not None and type(log) is bool
         assert verbose is not None and type(verbose) is bool
         assert timestamp is not None
 
         # If cross-validating for each hyperparameter trial,
-        if crossVal:
-            # Define dataframes to store crossval results
-            cvLossColumns = ["Loss_cv" + str(fold) for fold in range(1, k + 1)]
-            cvLossColumns.append("Loss_cv_Avg")
-            cvLossColumns.insert(0, "hpoID")
-            cvAccColumns = ["Acc_cv" + str(fold) for fold in range(1, k + 1)]
-            cvAccColumns.append("Acc_cv_Avg")
-            cvAccColumns.insert(0, "hpoID")
+        if cross_validation:
+            # Define dataframes to store cross_validation results
+            cv_loss_columns = ["Loss_cv" + str(fold) for fold in range(1, k + 1)]
+            cv_loss_columns.append("Loss_cv_Avg")
+            cv_loss_columns.insert(0, "hpo_id")
+            cv_acc_columns = ["Acc_cv" + str(fold) for fold in range(1, k + 1)]
+            cv_acc_columns.append("Acc_cv_Avg")
+            cv_acc_columns.insert(0, "hpo_id")
             
-            crossValLossDF = pd.DataFrame(columns=cvLossColumns)
-            crossValAccDF = pd.DataFrame(columns=cvAccColumns)
-            testLossDF = pd.DataFrame(columns=cvLossColumns)
-            testAccDF = pd.DataFrame(columns=cvAccColumns)
+            cross_validation_loss_df = pd.DataFrame(columns=cv_loss_columns)
+            cross_validation_acc_df = pd.DataFrame(columns=cv_acc_columns)
+            test_loss_df = pd.DataFrame(columns=cv_loss_columns)
+            test_acc_df = pd.DataFrame(columns=cv_acc_columns)
         
         # Load hyperparameter trials from "./hpo" folder
-        hpoFilePath = load_hpo_path
-        hpoDF = pd.read_csv(hpoFilePath)
-        print(hpoDF)
+        hpo_file_path = load_hpo_path
+        hpo_df = pd.read_csv(hpo_file_path)
+        print(hpo_df)
 
         # Iterating through the dataframe as a dictionary is fast.
         
@@ -377,60 +361,60 @@ def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/
         counter = 0
         # Define an error code in-case the optimization fails for a particular trial.
         # This allows the grid search to continue.
-        errWriteRow = ["ERR" for fold in range(k + 1)]
-        errWriteRow = dict(zip([fold for fold in range(k + 1)], errWriteRow))
+        err_write_row = ["ERR" for fold in range(k + 1)]
+        err_write_row = dict(zip([fold for fold in range(k + 1)], err_write_row))
         
         # For each trial,
-        for row in tqdm(hpoDF.to_dict(orient="records")):
+        for row in tqdm(hpo_df.to_dict(orient="records")):
             try:
                 # Try to train
                 scores = train_region_classifier(load_data_path=load_data_path, 
                                                  model_save_path=model_save_path, 
-                                                 crossVal=crossVal, 
+                                                 cross_validation=cross_validation, 
                                                  k=k, 
-                                                 hpoTrial=row, 
-                                                 randomState=randomState, 
+                                                 hpo_trial=row, 
+                                                 random_state=random_state, 
                                                  verbose=verbose, 
                                                  log=log,
                                                  timestamp=timestamp)
-                hpoID = counter
+                hpo_id = counter
                 counter = counter + 1
             except:
                 # If training failed, write the error code to the accumulated results
                 scores = {"ERR": "ERR"}
-                writeRow = errWriteRow
-                hpoID = counter
+                write_row = err_write_row
+                hpo_id = counter
                 counter = counter + 1
-            if crossVal:
-                dirHead, dirTail = os.path.split(load_hpo_path)
-                crossValLossPath = os.path.join(dirHead, "hpo_CVLoss_region_classifier.csv")
-                crossValAccPath = os.path.join(dirHead, "hpo_CVAcc_region_classifier.csv")
-                testLossPath = os.path.join(dirHead, "hpo_TestLoss_region_classifier.csv")
-                testAccPath = os.path.join(dirHead, "hpo_TestAcc_region_classifier.csv")
+            if cross_validation:
+                dir_head, dir_trial = os.path.split(load_hpo_path)
+                cross_validation_loss_path = os.path.join(dir_head, "hpo_CVLoss_region_classifier.csv")
+                cross_validation_acc_path = os.path.join(dir_head, "hpo_CVAcc_region_classifier.csv")
+                testLossPath = os.path.join(dir_head, "hpo_TestLoss_region_classifier.csv")
+                testAccPath = os.path.join(dir_head, "hpo_TestAcc_region_classifier.csv")
                 for key, value in scores.items():
                     if value == "ERR":
-                        crossValLossDF.loc[len(crossValLossDF)] = writeRow
-                        crossValAccDF.loc[len(crossValAccDF)] = writeRow
-                        testLossDF.loc[len(testLossDF)] = writeRow
-                        testAccDF.loc[len(testAccDF)] = writeRow
+                        cross_validation_loss_df.loc[len(cross_validation_loss_df)] = write_row
+                        cross_validation_acc_df.loc[len(cross_validation_acc_df)] = write_row
+                        test_loss_df.loc[len(test_loss_df)] = write_row
+                        test_acc_df.loc[len(test_acc_df)] = write_row
                         break
-                    averageVal = np.array(value).mean()
-                    writeRow = value
-                    writeRow.append(averageVal)
-                    writeRow.insert(0, hpoID)
+                    average_val = np.array(value).mean()
+                    write_row = value
+                    write_row.append(average_val)
+                    write_row.insert(0, hpo_id)
                     if key == "Val_Loss":
-                        crossValLossDF.loc[len(crossValLossDF)] = writeRow
+                        cross_validation_loss_df.loc[len(cross_validation_loss_df)] = write_row
                     elif key == "Val_Acc":
-                        crossValAccDF.loc[len(crossValAccDF)] = writeRow
+                        cross_validation_acc_df.loc[len(cross_validation_acc_df)] = write_row
                     elif key == "Test_Loss":
-                        testLossDF.loc[len(testLossDF)] = writeRow
+                        test_loss_df.loc[len(test_loss_df)] = write_row
                     elif key == "Test_Acc":
-                        testAccDF.loc[len(testAccDF)] = writeRow
+                        test_acc_df.loc[len(test_acc_df)] = write_row
                 if counter % save_every == 0:
-                    crossValLossDF.to_csv(crossValLossPath)
-                    crossValAccDF.to_csv(crossValAccPath)
-                    testLossDF.to_csv(testLossPath)
-                    testAccDF.to_csv(testAccPath)
+                    cross_validation_loss_df.to_csv(cross_validation_loss_path)
+                    cross_validation_acc_df.to_csv(cross_validation_acc_path)
+                    test_loss_df.to_csv(testLossPath)
+                    test_acc_df.to_csv(testAccPath)
                 if verbose:
                     print(row)
                     print(scores)
@@ -438,21 +422,21 @@ def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/
     # Legacy code
     else:
         # If cross-validating for each hyperparameter trial,
-        if crossVal:
-            # Define dataframes to store crossval results
-            cvLossColumns = ["Loss_cv" + str(fold) for fold in range(1, k + 1)]
-            cvLossColumns.append("Loss_cv_Avg")
-            cvLossColumns.insert(0, "hpoID")
-            cvAccColumns = ["Acc_cv" + str(fold) for fold in range(1, k + 1)]
-            cvAccColumns.append("Acc_cv_Avg")
-            cvAccColumns.insert(0, "hpoID")
-            crossValLossDF = pd.DataFrame(columns=cvLossColumns)
-            crossValAccDF = pd.DataFrame(columns=cvAccColumns)
+        if cross_validation:
+            # Define dataframes to store cross_validation results
+            cv_loss_columns = ["Loss_cv" + str(fold) for fold in range(1, k + 1)]
+            cv_loss_columns.append("Loss_cv_Avg")
+            cv_loss_columns.insert(0, "hpo_id")
+            cv_acc_columns = ["Acc_cv" + str(fold) for fold in range(1, k + 1)]
+            cv_acc_columns.append("Acc_cv_Avg")
+            cv_acc_columns.insert(0, "hpo_id")
+            cross_validation_loss_df = pd.DataFrame(columns=cv_loss_columns)
+            cross_validation_acc_df = pd.DataFrame(columns=cv_acc_columns)
         
         # Load hyperparameter trials from "./hpo" folder
-        hpoFilePath = os.path.join(load_hpo_path, "hpo_trials_region_classifier.csv")
-        hpoDF = pd.read_csv(hpoFilePath)
-        print(hpoDF)
+        hpo_file_path = os.path.join(load_hpo_path, "hpo_trials_region_classifier.csv")
+        hpo_df = pd.read_csv(hpo_file_path)
+        print(hpo_df)
 
         # Iterating through the dataframe as a dictionary is fast.
         
@@ -460,40 +444,47 @@ def grid_search_region_classifier(pipeline_inputs: dict = None, load_hpo_path="/
         counter = 0
         # Define an error code in-case the optimization fails for a particular trial.
         # This allows the grid search to continue.
-        errWriteRow = ["ERR" for fold in range(k + 1)]
-        errWriteRow = dict(zip([fold for fold in range(k + 1)], errWriteRow))
+        err_write_row = ["ERR" for fold in range(k + 1)]
+        err_write_row = dict(zip([fold for fold in range(k + 1)], err_write_row))
         
         # For each trial,
-        for row in tqdm(hpoDF.to_dict(orient="records")):
+        for row in tqdm(hpo_df.to_dict(orient="records")):
             try:
                 # Try to train
-                scores = train_region_classifier(load_data_path=load_data_path, model_save_path=model_save_path, crossVal=crossVal, k=k, hpoTrial=row, randomState=randomState, verbose=False, log=False)
-                hpoID = counter
+                scores = train_region_classifier(load_data_path=load_data_path, 
+                                                 model_save_path=model_save_path, 
+                                                 cross_validation=cross_validation, 
+                                                 k=k, 
+                                                 hpo_trial=row, 
+                                                 random_state=random_state, 
+                                                 verbose=False, 
+                                                 log=False)
+                hpo_id = counter
                 counter = counter + 1
             except:
                 # If training failed, write the error code to the accumulated results
-                writeRow = errWriteRow
-                hpoID = counter
+                write_row = err_write_row
+                hpo_id = counter
                 counter = counter + 1
-            if crossVal:
-                crossValLossPath = os.path.join(load_hpo_path, "hpo_Loss_region_classifier.csv")
-                crossValAccPath = os.path.join(load_hpo_path, "hpo_Acc_region_classifier.csv")
+            if cross_validation:
+                cross_validation_loss_path = os.path.join(load_hpo_path, "hpo_Loss_region_classifier.csv")
+                cross_validation_acc_path = os.path.join(load_hpo_path, "hpo_Acc_region_classifier.csv")
                 for key, value in scores.items():
                     if value == "ERR":
-                        crossValLossDF.loc[len(crossValLossDF)] = writeRow
-                        crossValAccDF.loc[len(crossValAccDF)] = writeRow
+                        cross_validation_loss_df.loc[len(cross_validation_loss_df)] = write_row
+                        cross_validation_acc_df.loc[len(cross_validation_acc_df)] = write_row
                         break
-                    averageVal = np.array(value).mean()
-                    writeRow = value
-                    writeRow.append(averageVal)
-                    writeRow.insert(0, hpoID)
+                    average_val = np.array(value).mean()
+                    write_row = value
+                    write_row.append(average_val)
+                    write_row.insert(0, hpo_id)
                     if key == "Val_Loss":
-                        crossValLossDF.loc[len(crossValLossDF)] = writeRow
+                        cross_validation_loss_df.loc[len(cross_validation_loss_df)] = write_row
                     elif key == "Val_Acc":
-                        crossValAccDF.loc[len(crossValAccDF)] = writeRow
+                        cross_validation_acc_df.loc[len(cross_validation_acc_df)] = write_row
                 if counter % save_every == 0:
-                    crossValLossDF.to_csv(crossValLossPath)
-                    crossValAccDF.to_csv(crossValAccPath)
+                    cross_validation_loss_df.to_csv(cross_validation_loss_path)
+                    cross_validation_acc_df.to_csv(cross_validation_acc_path)
                 if verbose:
                     print(row)
                     print(scores)
@@ -509,22 +500,22 @@ def classify_regions(pipeline_inputs: dict = None,
         # Get the list of codes to process from the control panel pipeline inputs 
         code_list = pipeline_inputs["code_list"]
         # For each code to process
-        for codeNum in tqdm(code_list):
+        for code_num in tqdm(code_list):
             # Get the raw image directory for that code
-            raw_code_dir = os.path.join(raw_directory, "code " + codeNum)
+            raw_code_dir = os.path.join(raw_directory, "code " + code_num)
             # Define positive/negative sample save paths
-            posSaveDir = os.path.join("data/classifier_training_samples/", "code " + codeNum, "positive")
-            negSaveDir = os.path.join("data/classifier_training_samples/", "code " + codeNum, "negative")
-            if not os.path.exists(posSaveDir):
-                os.makedirs(posSaveDir)
-                os.makedirs(negSaveDir)
-            print(f"Processing and saving data to:\n{posSaveDir}")
-            print(f"Processing and saving data to:\n{negSaveDir}")
+            pos_save_dir = os.path.join("data/classifier_training_samples/", "code " + code_num, "positive")
+            neg_save_dir = os.path.join("data/classifier_training_samples/", "code " + code_num, "negative")
+            if not os.path.exists(pos_save_dir):
+                os.makedirs(pos_save_dir)
+                os.makedirs(neg_save_dir)
+            print(f"Processing and saving data to:\n{pos_save_dir}")
+            print(f"Processing and saving data to:\n{neg_save_dir}")
             
             filenames = sorted(os.listdir(raw_code_dir))
             
             # Load MSER parameters for an initial division of positive/negative samples
-            MSER_params = pipeline_inputs["MSER_params_per_code"][codeNum]
+            MSER_params = pipeline_inputs["MSER_params_per_code"][code_num]
             # For each set of MSER parameters, which corresponds to each reference image of each code,
             for MSERFile in tqdm(MSER_params):
                 # These counters for positive/negative samples are counted per-reference image, not per-code
@@ -532,43 +523,43 @@ def classify_regions(pipeline_inputs: dict = None,
                 sum_neg = 0
                 raw_image_id = MSERFile.rstrip("_MSER.json")
                 with open(os.path.join(raw_code_dir, MSERFile), "r") as MSERObj:
-                    MSERDict = json.load(MSERObj)["optimizer.max"]["params"]
+                    mser_dict = dict(json.load(MSERObj)["optimizer.max"]["params"])
                 # Define a region detector for positive/negative division of samples
                 # This region detector is not optimized to be the most accurate
                 # Rather, we use the region detector as a means of initializing positive/negative samples.
                 # Later, we will actually hyperparameter optimize the region detectors for accurate positive/negative sample separation
-                region_detector = RegionDetector(MSER_parameters=MSERDict)
+                region_detector = RegionDetector(MSER_parameters=mser_dict)
                 # For each reference image in the raw image directory for a particular code,
-                refname = raw_image_id + "_ref.tiff"
+                ref_name = raw_image_id + "_ref.tiff"
                 
                 holograms=[]
                 # Ignore the file if it is not an image file
-                if ".tiff" not in refname:
+                if ".tiff" not in ref_name:
                     continue
                 # If the file is a reference image,
-                elif "ref" in refname:
+                elif "ref" in ref_name:
                     # Load reference
-                    reference = cv2.imread(os.path.join(raw_code_dir, refname), cv2.IMREAD_ANYDEPTH)
+                    reference = cv2.imread(os.path.join(raw_code_dir, ref_name), cv2.IMREAD_ANYDEPTH)
                     # For each image in the raw image directory of a particular code
-                    for imname in filenames:
+                    for image_name in filenames:
                         # The raw image file is just the name of the reference file without the reference designation
-                        code = refname.replace("_ref.tiff", "")
+                        code = ref_name.replace("_ref.tiff", "")
                         # If we found the code image that corresponds with its' own refernece image,
-                        if code == imname.replace(".tiff", "").split("_")[0] and ".tiff" in imname and "ref" not in imname:
+                        if code == image_name.replace(".tiff", "").split("_")[0] and ".tiff" in image_name and "ref" not in image_name:
                             # Read the raw code image
-                            hologram = cv2.imread("{}/{}".format(raw_code_dir, imname), cv2.IMREAD_ANYDEPTH)
+                            hologram = cv2.imread("{}/{}".format(raw_code_dir, image_name), cv2.IMREAD_ANYDEPTH)
                             hologram = hologram.astype(np.float32)
                             # Append the raw image data with the reference image data.
-                            holograms.append((hologram, imname.replace(".tiff", ""), reference))
+                            holograms.append((hologram, image_name.replace(".tiff", ""), reference))
 
                     for hologram in holograms:
                         holo, name, reference = hologram
-                        save_img_name = "data/test/{}_{}_regions.png".format(codeNum, name)
+                        save_img_name = "data/test/{}_{}_regions.png".format(code_num, name)
                         positive_regions, negative_regions = region_detector.detect_regions(holo,
                                                                                             reference,
                                                                                             save_img_name=save_img_name)
                         for i in range(len(positive_regions)):
-                            file_path = "{}/{}_{}_positive_{}.png".format(posSaveDir, codeNum, raw_image_id, i+sum_pos)
+                            file_path = "{}/{}_{}_positive_{}.png".format(pos_save_dir, code_num, raw_image_id, i+sum_pos)
                             region = positive_regions[i]
                             shape = region.shape
                             new_shape = (*shape[1:], shape[0])
@@ -577,7 +568,7 @@ def classify_regions(pipeline_inputs: dict = None,
                         sum_pos = sum_pos + len(positive_regions)
 
                         for i in range(len(negative_regions)):
-                            file_path = "{}/{}_{}_negative_{}.png".format(negSaveDir, codeNum, raw_image_id, i+sum_neg)
+                            file_path = "{}/{}_{}_negative_{}.png".format(neg_save_dir, code_num, raw_image_id, i+sum_neg)
                             region = negative_regions[i]
                             shape = region.shape
                             new_shape = (*shape[1:], shape[0])
@@ -601,19 +592,19 @@ def classify_regions(pipeline_inputs: dict = None,
         folder_name = img_folder[img_folder.rfind("/"):]
         holograms = []
 
-        for refname in os.listdir(img_folder):
-            if ".tiff" not in refname:
+        for ref_name in os.listdir(img_folder):
+            if ".tiff" not in ref_name:
                 continue
-            if "ref" in refname:
-                print("referencing: ", refname)
-                reference = cv2.imread("{}/{}".format(img_folder, refname), cv2.IMREAD_ANYDEPTH)
+            if "ref" in ref_name:
+                print("referencing: ", ref_name)
+                reference = cv2.imread("{}/{}".format(img_folder, ref_name), cv2.IMREAD_ANYDEPTH)
 
-                for imname in os.listdir(img_folder):
-                    code = refname.replace("_ref.tiff", "")
-                    if code == imname.replace(".tiff", "").split("_")[0] and ".tiff" in imname and "ref" not in imname:
-                        hologram = cv2.imread("{}/{}".format(img_folder, imname), cv2.IMREAD_ANYDEPTH)
+                for image_name in os.listdir(img_folder):
+                    code = ref_name.replace("_ref.tiff", "")
+                    if code == image_name.replace(".tiff", "").split("_")[0] and ".tiff" in image_name and "ref" not in image_name:
+                        hologram = cv2.imread("{}/{}".format(img_folder, image_name), cv2.IMREAD_ANYDEPTH)
                         hologram = hologram.astype(np.float32)
-                        holograms.append((hologram, imname.replace(".tiff", ""), reference))
+                        holograms.append((hologram, image_name.replace(".tiff", ""), reference))
 
         # Use the region detector to find regions that contain objects we're interested in, and regions that don't.
         sum_pos = 0
@@ -645,7 +636,7 @@ def classify_regions(pipeline_inputs: dict = None,
 
 def train_code_classifier(pipeline_inputs: dict = None,
                           timestamp: str = None,
-                          hyperDict: dict = None):
+                          hyper_dict: dict = None):
     
     if timestamp is None:
         timestamp = datetime.now().strftime("%m_%d_%y_%H:%M")
@@ -659,31 +650,31 @@ def train_code_classifier(pipeline_inputs: dict = None,
         
         codes = pipeline_inputs["code_list"]
         trainer = CodeClassifierTrainerGPU(codes, model_save_path=pipeline_inputs["model_save_parent_directory"])
-        codeDataComposite = []
+        code_data_composite = []
         for code in codes:
-            codePath = os.path.join(pipeline_inputs["sample_parent_directory"], "code " + code)
-            codeData = load_code(code_folder_path=codePath)
-            codeDataComposite = codeDataComposite + codeData
+            code_path = os.path.join(pipeline_inputs["sample_parent_directory"], "code " + code)
+            code_data = load_code(code_folder_path=code_path)
+            code_data_composite = code_data_composite + code_data
         
         # Total composite dataset samples
         # Only print verbosely if we are not hyperparameter optimizing
-        if hyperDict is None:
-            print("Total Composite Dataset Training Samples:\n{}".format(len(codeDataComposite)))
+        if hyper_dict is None:
+            print("Total Composite Dataset Training Samples:\n{}".format(len(code_data_composite)))
 
         # Based on the format of the return result of .load_code(),
         # Extract all the targets of the training samples
-        targets = np.array(list(zip(*codeDataComposite))[-1])
+        targets = np.array(list(zip(*code_data_composite))[-1])
         # All the samples
-        dataset = np.asarray(codeDataComposite, dtype=object)
+        dataset = np.asarray(code_data_composite, dtype=object)
 
         # Do a straified train/test split of all samples into training and test datasets
         # Returns the actual samples, not the indices of the samples.
-        trainDataset, testDataset = train_test_split(dataset, 
+        training_data, validation_data = train_test_split(dataset, 
                                                      test_size=pipeline_inputs["test_size"], 
                                                      stratify=targets,
                                                      random_state=pipeline_inputs["strat_kfold"]["random_state"])
         # Train targets
-        trainTargets = np.asarray(list(zip(*trainDataset))[-1])
+        training_targets = np.asarray(list(zip(*training_data))[-1])
 
         # CG: Stratified k-Fold cross-validation
         # If doing strat. k-fold cross-val.,
@@ -694,17 +685,17 @@ def train_code_classifier(pipeline_inputs: dict = None,
                                      random_state=pipeline_inputs["strat_kfold"]["random_state"])
             
             # Get the indices of the training dataset
-            trainDataset_idx = np.arange(len(trainDataset))
+            training_data_idx = np.arange(len(training_data))
             # Dictionary to hold cross-validation scores
-            crossValScores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
-            foldInd = 1
+            cross_val_scores = {"Val_Loss": [], "Val_Acc": [], "Test_Loss": [], "Test_Acc": []}
+            fold_index = 1
             # For each fold in the training dataset, define a new training dataset and validation dataset based off the training targets
-            for fold, (train_idx, val_idx) in enumerate(splits.split(trainDataset_idx, y=trainTargets)):
+            for fold, (train_idx, val_idx) in enumerate(splits.split(training_data_idx, y=training_targets)):
                 if pipeline_inputs["verbose"]:
                     print('\n\nFold {}'.format(fold + 1))
                 # Define a code classifier
                 # If we are not Bayesian optimizing,
-                if hyperDict is None:
+                if hyper_dict is None:
                     trainer = CodeClassifierTrainerGPU(codes=codes,
                                                     model_save_path=pipeline_inputs["model_save_parent_directory"],
                                                     verbose=pipeline_inputs["verbose"],
@@ -714,36 +705,36 @@ def train_code_classifier(pipeline_inputs: dict = None,
                 else:
                     trainer = CodeClassifierTrainerGPU(codes=codes,
                                                     model_save_path=pipeline_inputs["model_save_parent_directory"],
-                                                    batch_size=hyperDict["bs"],
-                                                    lr=hyperDict["lr"],
-                                                    fcSize=hyperDict["fcSize"],
-                                                    fcNum=hyperDict["fcNum"],
-                                                    dropoutRate=hyperDict["dr"],
+                                                    batch_size=hyper_dict["bs"],
+                                                    lr=hyper_dict["lr"],
+                                                    fcSize=hyper_dict["fcSize"],
+                                                    fcNum=hyper_dict["fcNum"],
+                                                    dropoutRate=hyper_dict["dr"],
                                                     verbose=pipeline_inputs["verbose"], 
                                                     log=pipeline_inputs["log"], 
                                                     timestamp=pipeline_inputs["timestamp"])
                 # Load code classifier training data and validation data
-                # Validation data is taken from the training dataset and targets (trainDataset, trainTargets)
+                # Validation data is taken from the training dataset and targets (training_data, training_targets)
                 # Test dataset and test targets are inputted separately
                 trainer.load_data(pipeline_inputs["sample_parent_directory"], 
-                                  trainDataset,
-                                  trainTargets, 
+                                  training_data,
+                                  training_targets, 
                                   train_idx, 
                                   val_idx, 
-                                  test_dataset=testDataset)
+                                  test_dataset=validation_data)
                 # Train
-                crossValScores = trainer.train(crossVal=pipeline_inputs["strat_kfold"]["activate"], 
-                                               crossValScores=crossValScores)
+                cross_val_scores = trainer.train(cross_validation=pipeline_inputs["strat_kfold"]["activate"], 
+                                               cross_val_scores=cross_val_scores)
                 # Keep track of what k-fold we are on for book-keeping
-                foldInd = foldInd + 1
+                fold_index = fold_index + 1
             
             # Print out the average cross-validation results
             if pipeline_inputs["verbose"]:
                 print("\nTRAINING COMPLETE.\nCross-Validation Dictionary:")
-                print(crossValScores)
-                for key, value in crossValScores.items():
+                print(cross_val_scores)
+                for key, value in cross_val_scores.items():
                     print("Avg. " + str(key) + ": " + str(np.array(value).mean()))
-            return crossValScores
+            return cross_val_scores
 
 def test_system(img_folder="/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)",
                 region_detector_path="data/best/best_region_classifier.pt",
@@ -788,19 +779,19 @@ def get_intensity(img_folder="/Users/apple/Dropbox (University of Michigan)/iMAP
     folder_name = img_folder[img_folder.rfind("/")+1:]
     holograms = []
 
-    for refname in os.listdir(img_folder):
-        if ".tiff" not in refname:
+    for ref_name in os.listdir(img_folder):
+        if ".tiff" not in ref_name:
             continue
-        if "ref" in refname:
-            print("referencing: ", refname)
-            reference = cv2.imread("{}/{}".format(img_folder, refname), cv2.IMREAD_ANYDEPTH)
+        if "ref" in ref_name:
+            print("referencing: ", ref_name)
+            reference = cv2.imread("{}/{}".format(img_folder, ref_name), cv2.IMREAD_ANYDEPTH)
 
-            for imname in os.listdir(img_folder):
-                code = refname.replace("_ref.tiff", "")
-                if code == imname.replace(".tiff", "").split("_")[0] and ".tiff" in imname and "ref" not in imname:
-                    hologram = cv2.imread("{}/{}".format(img_folder, imname), cv2.IMREAD_ANYDEPTH)
+            for image_name in os.listdir(img_folder):
+                code = ref_name.replace("_ref.tiff", "")
+                if code == image_name.replace(".tiff", "").split("_")[0] and ".tiff" in image_name and "ref" not in image_name:
+                    hologram = cv2.imread("{}/{}".format(img_folder, image_name), cv2.IMREAD_ANYDEPTH)
                     hologram = hologram.astype(np.float32)
-                    holograms.append((hologram, imname.replace(".tiff", ""), reference))
+                    holograms.append((hologram, image_name.replace(".tiff", ""), reference))
 
     intensities = []
     file_names = []
@@ -827,7 +818,7 @@ def get_intensity(img_folder="/Users/apple/Dropbox (University of Michigan)/iMAP
     csv_path="data/intensities/" + folder_name + ".csv"
     with open(csv_path, 'w') as csvfile:
         csvwriter = csv.writer(csvfile)
-        csvwriter.writerows(intensities)
+        csvwriter.write_rows(intensities)
 
 
 if __name__ == "__main__":
@@ -869,31 +860,19 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     
     if action == 'find_mser_params':
-            find_mser_params(pipeline_inputs=pipeline_inputs)
+        find_mser_params(pipeline_inputs=pipeline_inputs)
     
     elif action == 'train_region_classifier':
-            train_region_classifier(pipeline_inputs=pipeline_inputs)
+        train_region_classifier(pipeline_inputs=pipeline_inputs)
     
     elif action == 'hpo_region_classifier':
-        if pipeline_inputs is None:
-            # Legacy Code
-            grid_search_region_classifier()
-        else:
-            grid_search_region_classifier(pipeline_inputs=pipeline_inputs)
+        grid_search_region_classifier(pipeline_inputs=pipeline_inputs)
     
     elif action == 'classify_regions':
-        if pipeline_inputs is None:
-            # Legacy Code
-            classify_regions(load_path=reg_path, img_folder=dir)
-        else:
-            classify_regions(pipeline_inputs=pipeline_inputs)
+        classify_regions(pipeline_inputs=pipeline_inputs)
     
     elif action == 'train_code_classifier':
-        if pipeline_inputs is None:
-            # Legacy Code
-            train_code_classifier()
-        else:
-            train_code_classifier(pipeline_inputs=pipeline_inputs)
+        train_code_classifier(pipeline_inputs=pipeline_inputs)
 
     elif action == "bayesian_optimize":
         # Currently only implemented for the Jupyter notebook pipeline,
@@ -906,9 +885,9 @@ if __name__ == "__main__":
             
             study = checkpoint_study(study,
                      objective_with_custom_input,
-                     numTrials=pipeline_inputs["num_hpo"],
-                     checkpointEvery=pipeline_inputs["save_every"],
-                     checkpointPath=os.path.join(pipeline_inputs["checkpoint_path"], pipeline_inputs["timestamp"]))
+                     num_trials=pipeline_inputs["num_hpo"],
+                     checkpoint_every=pipeline_inputs["save_every"],
+                     checkpoint_path=os.path.join(pipeline_inputs["checkpoint_path"], pipeline_inputs["timestamp"]))
             
             '''# Optimize the study
             study.optimize(objective_with_custom_input, 
@@ -935,17 +914,5 @@ if __name__ == "__main__":
             print("  Params: ")
             for key, value in trial.params.items():
                 print("    {}: {}".format(key, value))
-
-    # Legacy Code
-    elif action == 'test_system':
-        assert(reg_path is not None and code_path is not None)
-        test_system(img_folder=dir, region_detector_path=reg_path,
-                    code_classifier_path=code_path)
-    
-    # Legacy Code
-    elif action == 'get_intensity':
-        get_intensity(img_folder=dir,
-                      region_detector_path=reg_path)
-    
     else:
       print("invalid action")

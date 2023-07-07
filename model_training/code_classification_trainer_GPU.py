@@ -11,20 +11,20 @@ from tqdm import tqdm
 from datetime import datetime
 
 # Prints augmented images out for debugging
-def print_images(sampleBatchTensor, 
+def print_images(sample_batch_tensor, 
                           path: str = None,
-                          batchID: str = None,
+                          batch_id: str = None,
                           # Activate image saving
                           activate: bool = False):
     if activate:
         if not os.path.exists(path):
             os.makedirs(path)
-        imagePILTF = transforms.ToPILImage()
-        for imageInd in range(len(sampleBatchTensor)):
-            imageTensor = sampleBatchTensor[imageInd]
-            imagePIL = imagePILTF(imageTensor)
-            filename = batchID + "_" + str(imageInd) + ".png"
-            imagePIL.save(os.path.join(path, filename))
+        image_pil_tf = transforms.ToPILImage()
+        for image_index in range(len(sample_batch_tensor)):
+            image_tensor = sample_batch_tensor[image_index]
+            image_pil = image_pil_tf(image_tensor)
+            filename = batch_id + "_" + str(image_index) + ".png"
+            image_pil.save(os.path.join(path, filename))
 
 class CodeClassifierTrainerGPU(object):
     def __init__(self, codes=None, 
@@ -32,9 +32,9 @@ class CodeClassifierTrainerGPU(object):
                  save_every_n: int = 10,
                  batch_size: int = 256,
                  lr: float = 1e-5,
-                 fcSize: int = 256,
-                 fcNum: int = 2,
-                 dropoutRate: float = 0.1, 
+                 fc_size: int = 256,
+                 fc_num: int = 2,
+                 dropout_rate: float = 0.1, 
                  verbose: bool = True,
                  log: bool = True,
                  timestamp: str = datetime.now().strftime("%m_%d_%y_%H:%M")):
@@ -46,6 +46,7 @@ class CodeClassifierTrainerGPU(object):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
         self.verbose = verbose
+        self.test_data = None
         # Print availability to GPU
         if self.verbose:
             print("CUDA Availability: " + str(torch.cuda.is_available()))
@@ -53,9 +54,9 @@ class CodeClassifierTrainerGPU(object):
         # Number of codes for the multi-class model
         n_codes = len(codes)
         self.model = CodeClassifier(n_codes,
-                                    fcSize=fcSize,
-                                    fcNum=fcNum,
-                                    dropoutRate=dropoutRate)
+                                    fc_size=fc_size,
+                                    fc_num=fc_num,
+                                    dropout_rate=dropout_rate)
 
         # Print the model architecture as a sanity check
         if self.verbose:
@@ -101,7 +102,9 @@ class CodeClassifierTrainerGPU(object):
         # We often want to early-stop based on some finite precision.
         # In other words, if the loss improves by 10^-6, this is not real improvement for practical purposes
         # Here, we define a minimum amount of improvement for the loss function
-        self.earlyStopDelta = 0.1
+        self.early_stop_delta = 0.1
+
+        self.test_acc_for_best_val = 0
 
         # Store the training, validation, test accuracy and training, validation, test loss
         self.losses = {"epoch": [], 
@@ -132,16 +135,17 @@ class CodeClassifierTrainerGPU(object):
             self.writer = SummaryWriter(os.path.join(self.model_save_path, self.log_timestamp, "logs"))
 
     def train(self, 
-              crossVal=False, 
-              crossValScores = {"Val_Loss": [], 
-                                "Val_Acc": [], 
-                                "Test_Loss": [], 
-                                "Test_Acc": []}):
+              cross_validation=False, 
+              cross_validation_scores = None):
         """
         Function to train a classifier on hologram regions.
         :return: None.
         """
-
+        if cross_validation_scores is None:
+            cross_validation_scores = {"Val_Loss": [], 
+                                "Val_Acc": [], 
+                                "Test_Loss": [], 
+                                "Test_Acc": []}
         # Set the PyTorch model to training mode.
         self.model.train()
 
@@ -184,19 +188,19 @@ class CodeClassifierTrainerGPU(object):
 
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
-                predictedLabels = ((torch.argmax(predictions, dim=1) + 1).float()).clone().detach().requires_grad_(True)
+                predicted_labels = ((torch.argmax(predictions, dim=1) + 1).float()).clone().detach().requires_grad_(True)
 
                 # Compute the loss and take one step along the gradient.
                 # Our barcodes are labelled from 1 ... N
                 # But the cross-entropy loss function accepts class labels from 0 ... N-1
                 # Here, we just decrement by 1 to match this convention
-                loss = loss_fn((predictedLabels - 1), (labels - 1))
+                loss = loss_fn((predicted_labels - 1), (labels - 1))
 
                 loss.backward()
                 optimizer.step()
 
                 # Compute the accuracy
-                train_acc += self.compute_accuracy(labels, predictedLabels)
+                train_acc += self.compute_accuracy(labels, predicted_labels)
                 train_loss += loss.detach().item()
 
             # Report training loss, training accuracy, validation loss, validation accuracy, and test loss/accuracy.
@@ -245,7 +249,7 @@ class CodeClassifierTrainerGPU(object):
                 self.save_model(epoch)
             
             # If our new loss is best,
-            if val_loss <= (best_val_loss - self.earlyStopDelta):
+            if val_loss <= (best_val_loss - self.early_stop_delta):
                 # Update the best loss with the new loss
                 best_val_loss = val_loss
                 # Update the test loss corresponding to the best validation loss
@@ -272,12 +276,12 @@ class CodeClassifierTrainerGPU(object):
             writer.close()
         
         # If cross-validating, then add the current fold scores to the running cross-validation counts of accuracy and loss
-        if crossVal:
-            crossValScores["Val_Loss"].append(best_val_loss)
-            crossValScores["Val_Acc"].append(self.best_val_acc)
-            crossValScores["Test_Loss"].append(self.test_loss_for_best_val)
-            crossValScores["Test_Acc"].append(self.test_acc_for_best_val)
-            return crossValScores
+        if cross_validation:
+            cross_validation_scores["Val_Loss"].append(best_val_loss)
+            cross_validation_scores["Val_Acc"].append(self.best_val_acc)
+            cross_validation_scores["Test_Loss"].append(self.test_loss_for_best_val)
+            cross_validation_scores["Test_Acc"].append(self.test_acc_for_best_val)
+            return cross_validation_scores
 
 
     def generate_batches(self, data):
@@ -322,42 +326,34 @@ class CodeClassifierTrainerGPU(object):
             #print("Samples before Augmentation")
             #print(samples)
             print_images(samples,
-                                  path="data/classifier_training_samples/Data_Augmentation_Inspection/NoAugment",
-                                  batchID=str(i),
-                                  activate=self.debug)
-
-            #if np.random.uniform(0, 1) < transform_prob:
-            #    tf = transforms.GaussianBlur(kernel_size=np.random.choice([2*i+1 for i in range(10)]))
-            #    samples = tf(samples)
-            #    print("Samples after Gaussian blur")
-            #    print(samples)
-            #    print_augmented_image(samples,
-            #                        path="data/classifier_training_samples/Data_Augmentation_Inspection/GaussBlur",
-            #                        batchID=str(i))
-
+                         path="data/classifier_training_samples/Data_Augmentation_Inspection/NoAugment",
+                         batch_id=str(i),
+                         activate=self.debug)
+            
             # Need to loop through and rotate all image samples in the batch and readd them to the list
-            samplesTemp = []
+            temp_samples = []
             if np.random.uniform(0, 1) < transform_prob:
                 for image in samples:
                     # Reshape to from (batch_size, channels, height, width) to (channels, height, width)
                     # Need to convert to Python Image Library (PIL) image representation for rotations to be proper
-                    singleImage = image.permute(0, 1, 2)
-                    #print("SINGLEIMAGE")
-                    #print(singleImage.shape)
-                    singleImagePIL = transforms.ToPILImage()(singleImage)
+                    single_image = image.permute(0, 1, 2)
+                    #print("single_image")
+                    #print(single_image.shape)
+                    single_image_pil = transforms.ToPILImage()(single_image)
                     tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
-                    singleImagePIL = tf(singleImagePIL)
+                    single_image_pil = tf(single_image_pil)
                     # Convert back to PyTorch tensor when done.
-                    sample = transforms.ToTensor()(singleImagePIL)
-                    samplesTemp.append(sample)
+                    sample = transforms.ToTensor()(single_image_pil)
+                    temp_samples.append(sample)
+                    
                 # Cast batch to tensor for PyTorch.
                 samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
                 #print("Samples after random rotation")
                 #print(samples)
                 print_images(samples,
-                                    path="data/classifier_training_samples/Data_Augmentation_Inspection/Rotations",
-                                    batchID=str(i),
-                                    activate=self.debug)
+                             path="data/classifier_training_samples/Data_Augmentation_Inspection/Rotations",
+                             batch_id=str(i),
+                             activate=self.debug)
 
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomHorizontalFlip()
@@ -366,7 +362,7 @@ class CodeClassifierTrainerGPU(object):
                 #print(samples)
                 print_images(samples,
                                     path="data/classifier_training_samples/Data_Augmentation_Inspection/HorizontalFlip",
-                                    batchID=str(i),
+                                    batch_id=str(i),
                                     activate=self.debug)
 
             if np.random.uniform(0, 1) < transform_prob:
@@ -375,28 +371,9 @@ class CodeClassifierTrainerGPU(object):
                 #print("Samples after random vertical flip")
                 #print(samples)
                 print_images(samples,
-                                    path="data/classifier_training_samples/Data_Augmentation_Inspection/VerticalFlip",
-                                    batchID=str(i),
-                                    activate=self.debug)
-
-
-            #if np.random.uniform(0, 1) < transform_prob:
-            #    tf = transforms.RandomAutocontrast()
-            #    samples = tf(samples)
-            #    print("Samples after random auto contrast")
-            #    print(samples)
-
-            #if np.random.uniform(0, 1) < transform_prob:
-            #    tf = transforms.RandomAdjustSharpness(sharpness_factor=np.random.uniform(0.5, 10))
-            #    samples = tf(samples)
-            #    print("Samples after random adjust sharpness")
-            #    print(samples)
-
-            #if np.random.uniform(0, 1) < transform_prob:
-            #    tf = transforms.RandomInvert()
-            #    samples = tf(samples)
-            #    print("Samples after random invert")
-            #    print(samples)
+                             path="data/classifier_training_samples/Data_Augmentation_Inspection/VerticalFlip",
+                             batch_id=str(i),
+                             activate=self.debug)
 
             labels = torch.as_tensor(np.array(labels, dtype=np.int32), dtype=torch.float32)
 
@@ -431,9 +408,9 @@ class CodeClassifierTrainerGPU(object):
 
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
-        predictedLabels = (torch.argmax(predictions, dim=1) + 1).float()
-        loss = self.loss_fn(predictedLabels - 1, labels - 1).item()
-        acc = self.compute_accuracy(labels, predictedLabels)
+        predicted_labels = (torch.argmax(predictions, dim=1) + 1).float()
+        loss = self.loss_fn(predicted_labels - 1, labels - 1).item()
+        acc = self.compute_accuracy(labels, predicted_labels)
 
         # Set the model back to training mode.
         self.model.train()
@@ -462,9 +439,9 @@ class CodeClassifierTrainerGPU(object):
 
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
-        predictedLabels = (torch.argmax(predictions, dim=1) + 1).float()
-        loss = self.loss_fn(predictedLabels - 1, labels - 1).item()
-        acc = self.compute_accuracy(labels, predictedLabels)
+        predicted_labels = (torch.argmax(predictions, dim=1) + 1).float()
+        loss = self.loss_fn(predicted_labels - 1, labels - 1).item()
+        acc = self.compute_accuracy(labels, predicted_labels)
 
         # Set the model back to training mode.
         self.model.train()
@@ -473,15 +450,15 @@ class CodeClassifierTrainerGPU(object):
         return loss, acc
     
     @torch.no_grad()
-    def compute_accuracy(self, labels, predictedLabels):
+    def compute_accuracy(self, labels, predicted_labels):
         """
         Function to compute the accuracy of a batch of predictions given a batch of labels.
         :param labels: Ground-truth labels to compare to.
-        :param predictedLabels: Predicted labels from the model.
+        :param predicted_labels: Predicted labels from the model.
         :return: Computed accuracy.
         """
 
-        predicted_labels = predictedLabels.argmax(dim=-1) + 1
+        predicted_labels = predicted_labels.argmax(dim=-1) + 1
         #print("predicted_labels")
         #print(predicted_labels)
         #print("labels")
@@ -498,8 +475,8 @@ class CodeClassifierTrainerGPU(object):
         return acc.item()
 
     def load_data(self, folder_path: str, 
-                  trainDatasetNP = None,
-                  trainTargetsNP = None, 
+                  train_dataset_np = None,
+                  train_targets_np = None, 
                   train_idx = None,
                   val_idx = None, 
                   test_dataset: np.ndarray = None):
@@ -517,10 +494,10 @@ class CodeClassifierTrainerGPU(object):
         assert val_idx is not None
         assert test_dataset is not None
 
-        self.train_data = np.take(trainDatasetNP, train_idx, axis=0)
-        train_targets = np.take(trainTargetsNP, train_idx, axis=0)
-        val_data = np.take(trainDatasetNP, val_idx, axis=0)
-        val_targets = np.take(trainTargetsNP, val_idx, axis=0)
+        self.train_data = np.take(train_dataset_np, train_idx, axis=0)
+        train_targets = np.take(train_targets_np, train_idx, axis=0)
+        val_data = np.take(train_dataset_np, val_idx, axis=0)
+        val_targets = np.take(train_targets_np, val_idx, axis=0)
         
         # Setting up validation dataset
         v_labels = []
@@ -531,12 +508,11 @@ class CodeClassifierTrainerGPU(object):
 
         v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.float32)
         v_regions = torch.as_tensor(np.array(v_regions, dtype=np.int32), dtype=torch.float32)
-        
-        print_images(v_regions,
-                            path="data/classifier_training_samples/Validation_Dataset/",
-                            batchID="val",
-                            activate=self.debug)
 
+        print_images(v_regions,
+                     path="data/classifier_training_samples/Validation_Dataset/",
+                     batch_id="val",
+                     activate=self.debug)
 
         self.val_data = (v_regions, v_labels)
 
@@ -550,9 +526,9 @@ class CodeClassifierTrainerGPU(object):
         t_regions = torch.as_tensor(np.array(t_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(t_regions,
-                            path="data/classifier_training_samples/Test_Dataset/",
-                            batchID="test",
-                            activate=self.debug)
+                     path="data/classifier_training_samples/Test_Dataset/",
+                     batch_id="test",
+                     activate=self.debug)
         
         self.test_data = (t_regions, t_labels)
 

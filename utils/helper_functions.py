@@ -1,6 +1,30 @@
 import numpy as np
 import torch.nn as nn
 import torch
+from scipy.signal import convolve2d
+
+
+def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=16):
+    conv_window_size = conv_window_size
+    convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (conv_window_size * conv_window_size)
+    bit_depth = bit_depth
+
+    hologram_image = hologram.astype(np.float32)
+    reference_image = reference.astype(np.float32)
+
+    # For each pixel in the reference, we will construct a square with side lengths `conv_window_size` centered
+    # at the current pixel. Then, we will compute the average value of every pixel in side this square, and set
+    # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
+    # image to use for normalization.
+    averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
+
+    # Normalize hologram by reference image.
+    normalized_hologram = hologram_image / averaged_reference_image
+
+    # Transform the normalized image into the appropriate bit-depth.
+    grayscale_hologram = normalized_hologram * 2 ** 16
+    grayscale_hologram = grayscale_hologram.clip(0, 2 ** 16 - 1).astype('uint{}'.format(bit_depth))
+    return grayscale_hologram
 
 
 def detect_conv_features(input_shape, conv_layers):

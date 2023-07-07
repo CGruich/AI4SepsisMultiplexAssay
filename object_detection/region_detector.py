@@ -2,7 +2,6 @@ import numpy as np
 import cv2
 from object_detection import RegionClassifier
 from utils import helper_functions
-from sklearn.preprocessing import scale
 
 
 class RegionDetector(object):
@@ -14,17 +13,20 @@ class RegionDetector(object):
             self.region_classifier.load_weights(model_load_path)
 
         if MSER_parameters is not None:
-            self.MSER_parameters = (round(MSER_parameters["delta"]), round(MSER_parameters["min_area"]), round(MSER_parameters["min_area"] + MSER_parameters["max_area"]),
-                                    MSER_parameters["max_variation"], MSER_parameters["min_diversity"], round(MSER_parameters["max_evolution"]),
-                                    round(MSER_parameters["area_threshold"]), MSER_parameters["min_margin"], round(MSER_parameters["edge_blur_size"]))
+            self.MSER_parameters = (round(MSER_parameters["delta"]),
+                                    round(MSER_parameters["min_area"]),
+                                    round(MSER_parameters["min_area"] + MSER_parameters["max_area"]),
+                                    MSER_parameters["max_variation"],
+                                    MSER_parameters["min_diversity"],
+                                    round(MSER_parameters["max_evolution"]),
+                                    round(MSER_parameters["area_threshold"]),
+                                    MSER_parameters["min_margin"],
+                                    round(MSER_parameters["edge_blur_size"]))
         else:
-            # Arbitrary MSER parameters. You should replace these with the parameters you have found for your task.
-            # Code_1_Ref1
+            # Determined from 13 images of Code 1 particles.
+            self.MSER_parameters = (7.284, 1112, 7990, 0.3684, 0.8674, 645.4, 55.92, 0.4834, 162.6)
+            # Code_1_Ref1 -- LEGACY
             self.MSER_parameters = (1, 547, 1881, 1, 0.81046, 717, 794, 0.09432, 39)
-            # Old square particle parameters
-            # self.MSER_parameters = (2, 722, 2233, 0.12414432810011933, 0.08659125698030035, 982, 441, 0.5634645997926272, 9)
-            # Initial guess
-            # self.MSER_parameters = (3, 500, 2500, 1.0, 0.0, 792, 403, 0.6771866102789077, 564)
 
     def detect_regions(self, hologram_image, reference_image, save_img_name=None):
         """
@@ -32,24 +34,11 @@ class RegionDetector(object):
         model to filter out regions that do not contain objects of interest.
         :param hologram_image: Hologram to detect objects in.
         :param reference_image: Reference image with which to normalize the hologram.
+        :param save_img_name: For debugging blob detection, an image with this name will be saved with MSER blobs drawn on it.
         :return: A list containing every region that an object was detected in.
         """
 
-        hologram_image = hologram_image.astype(np.float32)
-        # reference_image = reference_image.astype(np.float32)
-
-        # Normalize hologram by reference image.
-        # this says we should divide: https://arxiv.org/pdf/0904.0536.pdf, https://www.researchgate.net/figure/The-normalization-procedure-The-top-two-images-show-full-views-of-images-taken-by-the_fig4_44158922
-        # python package for doing normalization: https://github.com/manoharan-lab/holopy/blob/develop/holopy/core/process/img_proc.py, https://holopy.readthedocs.io/_/downloads/en/master/pdf/
-        normalized_hologram = np.divide(hologram_image, reference_image)
-        # instead of normalized_hologram.max(), this is empirically better option
-
-        normalized_hologram *= np.power(2, 16) - 1
-        normalized_hologram = np.clip(normalized_hologram, 0, np.power(2, 16) - 1)
-
-        # Now we change its data-type to a matrix of 16-bit integers, which results in a standard grayscale image.
-        grayscale_hologram = normalized_hologram.astype('uint16')
-        
+        grayscale_hologram = helper_functions.normalize_by_reference(hologram_image, reference_image)
         # Pass our newly normalized image to MSER for blob detection.
         detected_blobs, _ = self.mser_detect_blobs(grayscale_hologram,
                                                 draw_blobs=save_img_name is not None,
@@ -75,11 +64,7 @@ class RegionDetector(object):
                 (horizontal, vertical): the center of the rectangale, where horizontal starts from the left and vertical starts from the top
         """
 
-        hologram_image = hologram_image.astype(np.float32)
-        normalized_hologram = np.divide(hologram_image, reference_image)
-        normalized_hologram *= np.power(2, 16) - 1
-        normalized_hologram = np.clip(normalized_hologram, 0, np.power(2, 16) - 1)
-        grayscale_hologram = normalized_hologram.astype('uint16')
+        grayscale_hologram = helper_functions.normalize_by_reference(hologram_image, reference_image)
 
         # Pass our newly normalized image to MSER for blob detection.
         detected_blobs, rects = self.mser_detect_blobs(grayscale_hologram,

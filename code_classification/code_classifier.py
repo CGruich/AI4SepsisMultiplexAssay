@@ -7,8 +7,8 @@ from utils import helper_functions
 class CodeClassifier(nn.Module):
     def __init__(self, n_codes, 
                  region_shape=(1, 128, 128),
-                 fcSize: int = 256,
-                 fcNum: int = 2,
+                 fc_size: int = 256,
+                 fc_num: int = 2,
                  dropoutRate: float = 0.1, 
                  model_load_path=None):
         super().__init__()
@@ -19,7 +19,7 @@ class CodeClassifier(nn.Module):
         ch1 = 64
         ch2 = 32
         ch3 = 16
-        h1 = fcSize
+        h1 = fc_size
         self.conv_layers = [
             nn.BatchNorm2d(1),
             nn.Conv2d(in_channels=1, out_channels=ch1, kernel_size=(6,6), stride=(3,3)),
@@ -57,11 +57,11 @@ class CodeClassifier(nn.Module):
 
         self.fc_layers = []
         # Ensure at least one fully-connected layer
-        assert fcNum >= 1
+        assert fc_num >= 1
         # If more than 1 fully connected layer to add,
-        if fcNum > 1:
+        if fc_num > 1:
             # For each layer, not counting the very last layer
-            for _ in range(fcNum - 1):
+            for _ in range(fc_num - 1):
                 # Append dropout layer to prevent overfitting
                 self.fc_layers.append(nn.Dropout(p=dropoutRate))
                 # Append batch normalization
@@ -76,7 +76,7 @@ class CodeClassifier(nn.Module):
             self.fc_layers.append(nn.Linear(h1, n_codes))
             # Not compatible with cross-entropy loss function, as cross-entropy loss applies softmax internally
             # For now, this is commented out. In production outside of model training, this can be uncommented and used.
-            #nn.Softmax(dim=-1)
+            # nn.Softmax(dim=-1)
         # Else if only one fully connected layer to add
         else:
             # Dropout layer to prevent overfitting
@@ -98,8 +98,7 @@ class CodeClassifier(nn.Module):
                 x = np.asarray(x).astype(np.float32)  # apparently faster to do this conversion first
             x = torch.as_tensor(x, dtype=torch.float32)
         x = x.to(self.device)
-        forwardPass = self.model(x).to(self.device)
-        return forwardPass
+        return self.model(x).to(self.device)
 
     def classify_regions(self, regions):
         """
@@ -117,7 +116,6 @@ class CodeClassifier(nn.Module):
 
         # Assign each label to the corresponding region.
         for i in range(len(regions)):
-            region = regions[i]
             label = predicted_labels[i]
             predicted_region_codes.append(label.argmax())
 
