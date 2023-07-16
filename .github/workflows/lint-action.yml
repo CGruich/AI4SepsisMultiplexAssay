@@ -30,13 +30,14 @@ jobs:
           python-version: 3.8
 
       - name: Install Python dependencies
-        run: pip install black autopep8 oitnb
+        run: pip install black autopep8 oitnb black[jupyter]
 
       - name: Run linters
         uses: wearerequired/lint-action@v2
         with:
           auto_fix: true
           black: true
+          black_extensions: py,ipynb
           black_auto_fix: true
           autopep8: true
           autopep8_auto_fix: true
