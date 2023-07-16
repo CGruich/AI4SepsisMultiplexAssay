@@ -35,7 +35,7 @@ def generate_grid_search_file(
     # For each hyperparameter
     for choice_index in range(len(choice_list)):
         # If we are not done selecting values for a particular hyperparameter,
-        while choice_list[choice_index] != 'DONE':
+        while choice_list[choice_index] != "DONE":
             # Enter a value
             choice_list[choice_index] = input(
                 choice_labels[choice_index] + "\nEnter 'DONE' to exit.\n"
@@ -43,7 +43,7 @@ def generate_grid_search_file(
             assert type(choice_list[choice_index]) is str
 
             # If we are not done selecting values for a particular hyperparameter,
-            if choice_list[choice_index] != 'DONE':
+            if choice_list[choice_index] != "DONE":
                 # If the value is intended to be a float,
                 if choice_type[choice_index] == float:
                     converted = float(choice_list[choice_index])
@@ -53,9 +53,9 @@ def generate_grid_search_file(
                 # Otherwise, raise an exception because of unintended behavior
                 else:
                     raise Exception(
-                        'An unprogrammed datatype for hyperparameter '
+                        "An unprogrammed datatype for hyperparameter "
                         + choice_labels[choice_index]
-                        + ' was specified. See choice_type variable.'
+                        + " was specified. See choice_type variable."
                     )
                 assert converted is float or int
 
@@ -63,7 +63,7 @@ def generate_grid_search_file(
                 # the given hyperparameter.
                 hyperparameter_lists[choice_index].append(converted)
 
-            print('\n')
+            print("\n")
 
     # Ensure that we have suggested values for all the hyperparameters asked
     empty_counter = 0
@@ -75,19 +75,21 @@ def generate_grid_search_file(
 
     # Get all combinations of hyperparameters asked
     hpo_trials = list(product(*hyperparameter_lists))
-    print('\nHyperparameter Trials Calculated.\nSaving to: ' + save_path)
+    print("\nHyperparameter Trials Calculated.\nSaving to: " + save_path)
 
     print(len(hpo_trials))
 
     # Convert to PANDAS dataframe and save
     hpo_trials_df = (
-        pd.DataFrame(hpo_trials, columns=choice_labels).sample(
-            frac=1).reset_index(drop=True)
+        pd.DataFrame(hpo_trials, columns=choice_labels)
+        .sample(frac=1)
+        .reset_index(drop=True)
     )
     hpo_trials_id = [i for i in range(hpo_trials_df.shape[0])]
-    hpo_trials_df.insert(0, 'hpoID', hpo_trials_id)
+    hpo_trials_df.insert(0, "hpoID", hpo_trials_id)
     hpo_trials_df.to_csv(
-        osp.join(save_path, 'hpo_trials_region_classifier.csv'), index=False)
+        osp.join(save_path, "hpo_trials_region_classifier.csv"), index=False
+    )
     print(hpo_trials_df)
     return hpo_trials_df
 
@@ -102,12 +104,12 @@ weight_decay_beta1_list = [0.8, 0.9, 0.95]
 epsilon_list = [1e-8, 0.1, 1.0]
 fc_size = [64, 128, 192, 256]
 
-batch_size_choice = 'initialized'
-lr_choice = 'initialized'
-dropout_choice = 'initialized'
-weight_decay_beta1_choice = 'initialized'
-epsilon_choice = 'initialized'
-fc_choice = 'initialized'
+batch_size_choice = "initialized"
+lr_choice = "initialized"
+dropout_choice = "initialized"
+weight_decay_beta1_choice = "initialized"
+epsilon_choice = "initialized"
+fc_choice = "initialized"
 
 choice_list = [
     batch_size_choice,
@@ -118,12 +120,12 @@ choice_list = [
     fc_choice,
 ]
 choice_labels = [
-    'Batch_Size',
-    'lr',
-    'Dropout_Rate',
-    'Weight_Decay_Beta1',
-    'Epsilon',
-    'FC_Size',
+    "Batch_Size",
+    "lr",
+    "Dropout_Rate",
+    "Weight_Decay_Beta1",
+    "Epsilon",
+    "FC_Size",
 ]
 choice_type = [int, float, float, float, float, int]
 hyperparameter_lists = [
