@@ -11,9 +11,8 @@ from torchvision import transforms
 class CodeClassifierTrainer(object):
     def __init__(
         self,
-        codes=['1-1', '1-2', '1-3', '1-4', '1-5',
-               '1-6', '1-7', '1-8', '1-9', '1-10'],
-        model_save_path='data/models/code_classifier',
+        codes=["1-1", "1-2", "1-3", "1-4", "1-5", "1-6", "1-7", "1-8", "1-9", "1-10"],
+        model_save_path="data/models/code_classifier",
         save_every_n=10,
         batch_size=256,
     ):
@@ -37,11 +36,10 @@ class CodeClassifierTrainer(object):
         self.val_split = 0.2
         self.max_transform_sequence = 10
         self.best_val_acc = 0
-        self.losses = {'epoch': [], 'ta': [], 'va': [], 'tl': [], 'vl': []}
+        self.losses = {"epoch": [], "ta": [], "va": [], "tl": [], "vl": []}
         self.patience = 5
 
-        self.optimizer = optim.Adam(
-            self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.loss_fn = nn.BCELoss()
 
     def train(self):
@@ -88,21 +86,21 @@ class CodeClassifierTrainer(object):
             train_acc /= len(batches)
             val_loss, val_acc = self.validate()
 
-            self.losses['ta'].append(train_acc)
-            self.losses['va'].append(val_acc)
-            self.losses['tl'].append(train_loss)
-            self.losses['vl'].append(val_loss)
-            self.losses['epoch'].append(epoch)
+            self.losses["ta"].append(train_acc)
+            self.losses["va"].append(val_acc)
+            self.losses["tl"].append(train_loss)
+            self.losses["vl"].append(val_loss)
+            self.losses["epoch"].append(epoch)
 
             print(
-                'EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n'.format(
+                "EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
                     epoch, train_loss, train_acc, val_loss, val_acc
                 )
             )
 
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:
-                print('NEW BEST ACCURACY', val_acc, epoch)
+                print("NEW BEST ACCURACY", val_acc, epoch)
                 self.best_val_acc = val_acc
                 self.save_model(epoch)
 
@@ -135,7 +133,7 @@ class CodeClassifierTrainer(object):
         bs = self.batch_size
         for i in range(len(data) // bs):
             # Choose our random batch.
-            idxs = indices[i * bs: i * bs + bs]
+            idxs = indices[i * bs : i * bs + bs]
             batch = data[idxs]
 
             samples = []
@@ -153,8 +151,7 @@ class CodeClassifierTrainer(object):
             # Cast batch to tensor for PyTorch.
             samples = torch.as_tensor(samples, dtype=torch.float32)
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomRotation(
-                    degrees=np.random.randint(0, 365))
+                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
@@ -235,26 +232,25 @@ class CodeClassifierTrainer(object):
         :return: None
         """
 
-        positive_sample_folder = os.path.join(folder_path, 'positive')
-        negative_sample_folder = os.path.join(folder_path, 'negative')
+        positive_sample_folder = os.path.join(folder_path, "positive")
+        negative_sample_folder = os.path.join(folder_path, "negative")
         n_negative = 0
         data = []
         label_counts = {key: 0 for key in self.code_map.keys()}
 
         # For each image in the positive samples folder.
         for file_name in os.listdir(positive_sample_folder):
-            if not file_name.endswith('.png'):
+            if not file_name.endswith(".png"):
                 continue
 
-            if 'set' in file_name:
-                end = file_name.find('_')
+            if "set" in file_name:
+                end = file_name.find("_")
                 code = file_name[:end].strip()
             else:
-                code = file_name[: file_name.find('(')].strip()
+                code = file_name[: file_name.find("(")].strip()
             # Load region.
             region = cv2.imread(
-                os.path.join(positive_sample_folder,
-                             file_name), cv2.IMREAD_ANYDEPTH
+                os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
             )
             label = self.one_hot(self.code_map[code])
             label_counts[code] += 1
@@ -263,10 +259,10 @@ class CodeClassifierTrainer(object):
             data.append([region.reshape(1, *region.shape), label])
 
         n_positive = len(data)
-        print('Loaded {} positive training samples.'.format(n_positive))
-        print('Label counts:')
+        print("Loaded {} positive training samples.".format(n_positive))
+        print("Label counts:")
         for key, value in label_counts.items():
-            print('{} | {}'.format(key, value))
+            print("{} | {}".format(key, value))
 
         # For each image in the negative samples folder.
         # negative_samples = []
@@ -313,23 +309,27 @@ class CodeClassifierTrainer(object):
         """
 
         path = self.model_save_path
-        model_save_file = os.path.join(path, 'model_{}.pt'.format(epoch))
-        train_csv_path = 'data/code_training_losses.csv'
+        model_save_file = os.path.join(path, "model_{}.pt".format(epoch))
+        train_csv_path = "data/code_training_losses.csv"
 
         print(path)
         if not os.path.exists(path):
             os.makedirs(path)
 
         torch.save(self.model.state_dict(), model_save_file)
-        with open(train_csv_path, 'w') as f:
+        with open(train_csv_path, "w") as f:
             ls = self.losses
             f.write(
-                'Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n'
+                "Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n"
             )
             for i in range(epoch):
                 f.write(
-                    '{},{},{},{},{}\n'.format(
-                        ls['epoch'][i], ls['ta'][i], ls['va'][i], ls['tl'][i], ls['vl'][i],
+                    "{},{},{},{},{}\n".format(
+                        ls["epoch"][i],
+                        ls["ta"][i],
+                        ls["va"][i],
+                        ls["tl"][i],
+                        ls["vl"][i],
                     )
                 )
 
