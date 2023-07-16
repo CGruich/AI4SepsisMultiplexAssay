@@ -20,11 +20,13 @@ class RegionClassifier(nn.Module):
 
         self.conv_layers = [
             nn.BatchNorm2d(1),
-            nn.Conv2d(in_channels=1, out_channels=ch1, kernel_size=(6, 6), stride=(3, 3)),
+            nn.Conv2d(in_channels=1, out_channels=ch1,
+                      kernel_size=(6, 6), stride=(3, 3)),
             nn.PReLU(),
             nn.MaxPool2d(kernel_size=(2, 2)),
             nn.BatchNorm2d(ch1),
-            nn.Conv2d(in_channels=ch1, out_channels=ch2, kernel_size=(4, 4), stride=(2, 2)),
+            nn.Conv2d(in_channels=ch1, out_channels=ch2,
+                      kernel_size=(4, 4), stride=(2, 2)),
             nn.PReLU(),
             nn.MaxPool2d(kernel_size=(2, 2)),
         ]
