@@ -14,11 +14,11 @@ from datetime import datetime
 class RegionClassifierTrainerGPU(object):
     def __init__(
         self,
-        model_save_path: str = "data/models/region",
+        model_save_path: str = 'data/models/region',
         hpo_trial=None,
         verbose: bool = True,
         log: bool = True,
-        timestamp: str = datetime.now().strftime("%m_%d_%y_%H:%M"),
+        timestamp: str = datetime.now().strftime('%m_%d_%y_%H:%M'),
         k: int = None,
     ):
         # Printing verbosity
@@ -27,9 +27,9 @@ class RegionClassifierTrainerGPU(object):
         self.test_data = None
 
         # CG: CPU or GPU, prioritizes GPU if available.
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         if self.verbose:
-            print("CUDA Availability: " + str(torch.cuda.is_available()))
+            print('CUDA Availability: ' + str(torch.cuda.is_available()))
 
         self.dropout = 0.3
         self.h1 = 64
@@ -52,13 +52,13 @@ class RegionClassifierTrainerGPU(object):
         self.val_split = 0.2
         self.max_transform_sequence = 10
         self.losses = {
-            "epoch": [],
-            "ta": [],
-            "va": [],
-            "test_acc": [],
-            "tl": [],
-            "vl": [],
-            "test_loss": [],
+            'epoch': [],
+            'ta': [],
+            'va': [],
+            'test_acc': [],
+            'tl': [],
+            'vl': [],
+            'test_loss': [],
         }
         self.best_val_acc = 0
         self.patience = 10
@@ -79,27 +79,27 @@ class RegionClassifierTrainerGPU(object):
         # If running grid search hyperparameter optimization,
         if self.hpo_trial is not None:
             for key, value in self.hpo_trial.items():
-                if key == "Batch_Size":
+                if key == 'Batch_Size':
                     self.batch_size = value
-                elif key == "lr":
+                elif key == 'lr':
                     self.learning_rate = value
-                elif key == "Dropout_Rate":
+                elif key == 'Dropout_Rate':
                     self.dropout = value
-                elif key == "Weight_Decay_Beta1":
+                elif key == 'Weight_Decay_Beta1':
                     self.beta1 = value
-                elif key == "Epsilon":
+                elif key == 'Epsilon':
                     self.epsilon = value
-                elif key == "FC_Size":
+                elif key == 'FC_Size':
                     self.h1 = value
-                elif key == "hpoID":
-                    self.hpoID = "hpoID_" + str(value)
+                elif key == 'hpoID':
+                    self.hpoID = 'hpoID_' + str(value)
                     # If cross-validating, then save each hyperparameter trial with a folder for each k-fold.
                     if k is not None:
                         self.hpoLogPath = os.path.join(
                             model_save_path,
                             self.log_timestamp,
                             self.hpoID,
-                            self.hpoID + "_" + str(k),
+                            self.hpoID + '_' + str(k),
                         )
                     # Otherwise if not cross-validating but still hyperparameter optimizing
                     else:
@@ -107,15 +107,13 @@ class RegionClassifierTrainerGPU(object):
                             model_save_path, self.log_timestamp, self.hpoID
                         )
 
-        self.model = RegionClassifier(
-            h1=self.h1, dropout=self.dropout, verbose=self.verbose
-        )
+        self.model = RegionClassifier(h1=self.h1, dropout=self.dropout, verbose=self.verbose)
         self.model.dropout = self.dropout
         self.model.h1 = self.h1
 
         self.model.to(self.device)
         if self.verbose:
-            print("Model Loaded to GPU: " + str(next(self.model.parameters()).is_cuda))
+            print('Model Loaded to GPU: ' + str(next(self.model.parameters()).is_cuda))
 
         # How many epochs to wait before early-stopping is allowed.
         self.warmup = 10
@@ -132,7 +130,7 @@ class RegionClassifierTrainerGPU(object):
                 self.writer = SummaryWriter(self.hpoLogPath)
             else:
                 self.writer = SummaryWriter(
-                    os.path.join(self.model_save_path, self.log_timestamp, "logs")
+                    os.path.join(self.model_save_path, self.log_timestamp, 'logs')
                 )
 
     def train(self, cross_validate=False, cross_val_scores=None):
@@ -144,10 +142,10 @@ class RegionClassifierTrainerGPU(object):
         # Mutable default values should not be defined in the function parameter list.
         if cross_val_scores is None:
             cross_val_scores = {
-                "Val_Loss": [],
-                "Val_Acc": [],
-                "Test_Loss": [],
-                "Test_Acc": [],
+                'Val_Loss': [],
+                'Val_Acc': [],
+                'Test_Loss': [],
+                'Test_Acc': [],
             }
 
         # Set the PyTorch model to training mode.
@@ -176,9 +174,7 @@ class RegionClassifierTrainerGPU(object):
 
             # Generate batches of augmented training samples.
             batches = self.generate_batches(train_data)
-            for batch in tqdm(
-                batches, desc="Epoch " + str(epoch) + ":", disable=not verbose
-            ):
+            for batch in tqdm(batches, desc='Epoch ' + str(epoch) + ':', disable=not verbose):
                 samples, labels = batch
                 # Moving the model to GPU is in-place, but moving the data is not.
                 samples = samples.to(self.device)
@@ -203,34 +199,30 @@ class RegionClassifierTrainerGPU(object):
             test_loss, test_acc = self.test()
 
             writer.add_scalars(
-                "Loss",
-                {
-                    "Train_Loss": train_loss,
-                    "Val_Loss": val_loss,
-                    "Test_Loss": test_loss,
-                },
+                'Loss',
+                {'Train_Loss': train_loss, 'Val_Loss': val_loss, 'Test_Loss': test_loss,},
                 epoch,
             )
             writer.add_scalars(
-                "Accuracy",
-                {"Train_Acc": train_acc, "Val_Acc": val_acc, "Test_Acc": test_acc},
+                'Accuracy',
+                {'Train_Acc': train_acc, 'Val_Acc': val_acc, 'Test_Acc': test_acc},
                 epoch,
             )
-            writer.add_scalar("Train_Loss", train_loss, epoch)
-            writer.add_scalar("Train_Acc", train_acc, epoch)
-            writer.add_scalar("Val_Loss", val_loss, epoch)
-            writer.add_scalar("Val_Acc", val_acc, epoch)
-            writer.add_scalar("Test_Loss", test_loss, epoch)
-            writer.add_scalar("Test_Acc", test_acc, epoch)
-            writer.add_scalar("Patience (Early Stopping)", patience, epoch)
+            writer.add_scalar('Train_Loss', train_loss, epoch)
+            writer.add_scalar('Train_Acc', train_acc, epoch)
+            writer.add_scalar('Val_Loss', val_loss, epoch)
+            writer.add_scalar('Val_Acc', val_acc, epoch)
+            writer.add_scalar('Test_Loss', test_loss, epoch)
+            writer.add_scalar('Test_Acc', test_acc, epoch)
+            writer.add_scalar('Patience (Early Stopping)', patience, epoch)
 
-            self.losses["ta"].append(train_acc)
-            self.losses["va"].append(val_acc)
-            self.losses["test_acc"].append(test_acc)
-            self.losses["tl"].append(train_loss)
-            self.losses["vl"].append(val_loss)
-            self.losses["test_loss"].append(test_loss)
-            self.losses["epoch"].append(epoch)
+            self.losses['ta'].append(train_acc)
+            self.losses['va'].append(val_acc)
+            self.losses['test_acc'].append(test_acc)
+            self.losses['tl'].append(train_loss)
+            self.losses['vl'].append(val_loss)
+            self.losses['test_loss'].append(test_loss)
+            self.losses['epoch'].append(epoch)
 
             # CG: Legacy Code
             # print("EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
@@ -239,7 +231,7 @@ class RegionClassifierTrainerGPU(object):
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:
                 if verbose:
-                    print("NEW BEST VAL. ACCURACY", val_acc, epoch)
+                    print('NEW BEST VAL. ACCURACY', val_acc, epoch)
                 self.best_val_acc = val_acc
                 self.test_acc_for_best_val = test_acc
                 if hpo_trial is None:
@@ -262,10 +254,10 @@ class RegionClassifierTrainerGPU(object):
         writer.close()
 
         if cross_validate:
-            cross_val_scores["Val_Loss"].append(best_val_loss)
-            cross_val_scores["Val_Acc"].append(self.best_val_acc)
-            cross_val_scores["Test_Loss"].append(self.test_loss_for_best_val)
-            cross_val_scores["Test_Acc"].append(self.test_acc_for_best_val)
+            cross_val_scores['Val_Loss'].append(best_val_loss)
+            cross_val_scores['Val_Acc'].append(self.best_val_acc)
+            cross_val_scores['Test_Loss'].append(self.test_loss_for_best_val)
+            cross_val_scores['Test_Acc'].append(self.test_acc_for_best_val)
             return cross_val_scores
 
     def generate_batches(self, data):
@@ -302,9 +294,7 @@ class RegionClassifierTrainerGPU(object):
                 labels.append(label)
 
             # Cast batch to tensor for PyTorch.
-            samples = torch.as_tensor(
-                np.array(samples, dtype=np.int32), dtype=torch.float32
-            )
+            samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.GaussianBlur(
                     kernel_size=np.random.choice([2 * i + 1 for i in range(10)])
@@ -337,9 +327,7 @@ class RegionClassifierTrainerGPU(object):
                 tf = transforms.RandomInvert()
                 samples = tf(samples)
 
-            labels = torch.as_tensor(
-                np.array(labels, dtype=np.int32), dtype=torch.float32
-            )
+            labels = torch.as_tensor(np.array(labels, dtype=np.int32), dtype=torch.float32)
 
             batches.append((samples, labels))
 
@@ -477,13 +465,13 @@ class RegionClassifierTrainerGPU(object):
             :param folder_path: Folder to load from.
             :return: None"""
 
-            positive_sample_folder = os.path.join(folder_path, "positive")
-            negative_sample_folder = os.path.join(folder_path, "negative")
+            positive_sample_folder = os.path.join(folder_path, 'positive')
+            negative_sample_folder = os.path.join(folder_path, 'negative')
             data = []
 
             # For each image in the positive samples folder.
             for file_name in os.listdir(positive_sample_folder):
-                if not file_name.endswith(".png"):
+                if not file_name.endswith('.png'):
                     continue
 
                 # Load region.
@@ -496,11 +484,11 @@ class RegionClassifierTrainerGPU(object):
                 data.append([region.reshape(1, *region.shape), label])
 
             n_positive = len(data)
-            print("Loaded {} positive training samples.".format(n_positive))
+            print('Loaded {} positive training samples.'.format(n_positive))
 
             # For each image in the negative samples folder.
             for file_name in os.listdir(negative_sample_folder):
-                if not file_name.endswith(".png"):
+                if not file_name.endswith('.png'):
                     continue
 
                 # Load region.
@@ -511,7 +499,7 @@ class RegionClassifierTrainerGPU(object):
                 # Append region and negative label to dataset.
                 data.append([region.reshape(1, *region.shape), label])
 
-            print("Loaded {} negative training samples.".format(len(data) - n_positive))
+            print('Loaded {} negative training samples.'.format(len(data) - n_positive))
 
             # CG: Deprecated for cross-validation scheme.
             # This deprecated scheme uses one validation dataset, which may be hard or easy
@@ -544,27 +532,27 @@ class RegionClassifierTrainerGPU(object):
         """
 
         path = self.model_save_path
-        model_save_file = os.path.join(path, "model_{}.pt".format(epoch))
-        train_csv_path = "data/region_training_losses.csv"
+        model_save_file = os.path.join(path, 'model_{}.pt'.format(epoch))
+        train_csv_path = 'data/region_training_losses.csv'
 
         if not os.path.exists(path):
             os.makedirs(path)
 
         torch.save(self.model.state_dict(), model_save_file)
-        with open(train_csv_path, "w") as f:
+        with open(train_csv_path, 'w') as f:
             ls = self.losses
             f.write(
-                "Epoch,Training Accuracy,Validation Accuracy,Test Accuracy,Training Loss,Validation Loss,Test Loss\n"
+                'Epoch,Training Accuracy,Validation Accuracy,Test Accuracy,Training Loss,Validation Loss,Test Loss\n'
             )
             for i in range(epoch):
                 f.write(
-                    "{},{},{},{},{},{},{}\n".format(
-                        ls["epoch"][i],
-                        ls["ta"][i],
-                        ls["va"][i],
-                        ls["test_acc"][i],
-                        ls["tl"][i],
-                        ls["vl"][i],
-                        ls["test_loss"][i],
+                    '{},{},{},{},{},{},{}\n'.format(
+                        ls['epoch'][i],
+                        ls['ta'][i],
+                        ls['va'][i],
+                        ls['test_acc'][i],
+                        ls['tl'][i],
+                        ls['vl'][i],
+                        ls['test_loss'][i],
                     )
                 )
