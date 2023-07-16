@@ -27,8 +27,7 @@ class RegionClassifierTrainerGPU(object):
         self.test_data = None
 
         # CG: CPU or GPU, prioritizes GPU if available.
-        self.device = torch.device(
-            'cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         if self.verbose:
             print('CUDA Availability: ' + str(torch.cuda.is_available()))
 
@@ -108,15 +107,13 @@ class RegionClassifierTrainerGPU(object):
                             model_save_path, self.log_timestamp, self.hpoID
                         )
 
-        self.model = RegionClassifier(
-            h1=self.h1, dropout=self.dropout, verbose=self.verbose)
+        self.model = RegionClassifier(h1=self.h1, dropout=self.dropout, verbose=self.verbose)
         self.model.dropout = self.dropout
         self.model.h1 = self.h1
 
         self.model.to(self.device)
         if self.verbose:
-            print('Model Loaded to GPU: ' +
-                  str(next(self.model.parameters()).is_cuda))
+            print('Model Loaded to GPU: ' + str(next(self.model.parameters()).is_cuda))
 
         # How many epochs to wait before early-stopping is allowed.
         self.warmup = 10
@@ -133,8 +130,7 @@ class RegionClassifierTrainerGPU(object):
                 self.writer = SummaryWriter(self.hpoLogPath)
             else:
                 self.writer = SummaryWriter(
-                    os.path.join(self.model_save_path,
-                                 self.log_timestamp, 'logs')
+                    os.path.join(self.model_save_path, self.log_timestamp, 'logs')
                 )
 
     def train(self, cross_validate=False, cross_val_scores=None):
@@ -204,8 +200,7 @@ class RegionClassifierTrainerGPU(object):
 
             writer.add_scalars(
                 'Loss',
-                {'Train_Loss': train_loss, 'Val_Loss': val_loss,
-                    'Test_Loss': test_loss, },
+                {'Train_Loss': train_loss, 'Val_Loss': val_loss, 'Test_Loss': test_loss,},
                 epoch,
             )
             writer.add_scalars(
@@ -283,7 +278,7 @@ class RegionClassifierTrainerGPU(object):
         bs = self.batch_size
         for i in range(len(data) // bs):
             # Choose our random batch.
-            idxs = indices[i * bs: i * bs + bs]
+            idxs = indices[i * bs : i * bs + bs]
             batch = data[idxs]
 
             samples = []
@@ -299,18 +294,15 @@ class RegionClassifierTrainerGPU(object):
                 labels.append(label)
 
             # Cast batch to tensor for PyTorch.
-            samples = torch.as_tensor(
-                np.array(samples, dtype=np.int32), dtype=torch.float32)
+            samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.GaussianBlur(
-                    kernel_size=np.random.choice(
-                        [2 * i + 1 for i in range(10)])
+                    kernel_size=np.random.choice([2 * i + 1 for i in range(10)])
                 )
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomRotation(
-                    degrees=np.random.randint(0, 365))
+                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
@@ -335,8 +327,7 @@ class RegionClassifierTrainerGPU(object):
                 tf = transforms.RandomInvert()
                 samples = tf(samples)
 
-            labels = torch.as_tensor(
-                np.array(labels, dtype=np.int32), dtype=torch.float32)
+            labels = torch.as_tensor(np.array(labels, dtype=np.int32), dtype=torch.float32)
 
             batches.append((samples, labels))
 
@@ -485,8 +476,7 @@ class RegionClassifierTrainerGPU(object):
 
                 # Load region.
                 region = cv2.imread(
-                    os.path.join(positive_sample_folder,
-                                 file_name), cv2.IMREAD_ANYDEPTH
+                    os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
                 )
                 label = 1
 
@@ -503,15 +493,13 @@ class RegionClassifierTrainerGPU(object):
 
                 # Load region.
                 region = cv2.imread(
-                    os.path.join(negative_sample_folder,
-                                 file_name), cv2.IMREAD_ANYDEPTH
+                    os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
                 )
                 label = 0
                 # Append region and negative label to dataset.
                 data.append([region.reshape(1, *region.shape), label])
 
-            print('Loaded {} negative training samples.'.format(
-                len(data) - n_positive))
+            print('Loaded {} negative training samples.'.format(len(data) - n_positive))
 
             # CG: Deprecated for cross-validation scheme.
             # This deprecated scheme uses one validation dataset, which may be hard or easy
