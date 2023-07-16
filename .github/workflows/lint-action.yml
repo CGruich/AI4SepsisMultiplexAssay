@@ -16,7 +16,7 @@ permissions:
   contents: write
 
 jobs:
-  run-linters:
+  run-autofix-linters:
     name: Run linters
     runs-on: ubuntu-latest
 
@@ -37,7 +37,7 @@ jobs:
         with:
           auto_fix: true
           black: true
-          black_extensions: py,ipynb
+          black_extensions: ipynb
           black_auto_fix: true
           autopep8: true
           autopep8_auto_fix: true
