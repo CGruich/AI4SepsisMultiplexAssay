@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   run-autofix-linters:
-    name: Run linters
+    name: Run auto-fix linters
     runs-on: ubuntu-latest
 
     steps:
