@@ -9,7 +9,7 @@ from torchvision import transforms
 
 
 class RegionClassifierTrainer(object):
-    def __init__(self, model_save_path='data/models'):
+    def __init__(self, model_save_path="data/models"):
         self.model = RegionClassifier()
         self.train_data = None
         self.val_data = None
@@ -23,12 +23,11 @@ class RegionClassifierTrainer(object):
         self.learning_rate = 3e-4
         self.val_split = 0.2
         self.max_transform_sequence = 10
-        self.losses = {'epoch': [], 'ta': [], 'va': [], 'tl': [], 'vl': []}
+        self.losses = {"epoch": [], "ta": [], "va": [], "tl": [], "vl": []}
         self.best_val_acc = 0
         self.patience = 10
 
-        self.optimizer = optim.Adam(
-            self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.loss_fn = nn.BCELoss()
 
     def train(self):
@@ -75,21 +74,21 @@ class RegionClassifierTrainer(object):
             train_acc /= len(batches)
             val_loss, val_acc = self.validate()
 
-            self.losses['ta'].append(train_acc)
-            self.losses['va'].append(val_acc)
-            self.losses['tl'].append(train_loss)
-            self.losses['vl'].append(val_loss)
-            self.losses['epoch'].append(epoch)
+            self.losses["ta"].append(train_acc)
+            self.losses["va"].append(val_acc)
+            self.losses["tl"].append(train_loss)
+            self.losses["vl"].append(val_loss)
+            self.losses["epoch"].append(epoch)
 
             print(
-                'EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n'.format(
+                "EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
                     epoch, train_loss, train_acc, val_loss, val_acc
                 )
             )
 
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:
-                print('NEW BEST ACCURACY', val_acc, epoch)
+                print("NEW BEST ACCURACY", val_acc, epoch)
                 self.best_val_acc = val_acc
                 self.save_model(epoch)
 
@@ -122,7 +121,7 @@ class RegionClassifierTrainer(object):
         bs = self.batch_size
         for i in range(len(data) // bs):
             # Choose our random batch.
-            idxs = indices[i * bs: i * bs + bs]
+            idxs = indices[i * bs : i * bs + bs]
             batch = data[idxs]
 
             samples = []
@@ -141,14 +140,12 @@ class RegionClassifierTrainer(object):
             samples = torch.as_tensor(samples, dtype=torch.float32)
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.GaussianBlur(
-                    kernel_size=np.random.choice(
-                        [2 * i + 1 for i in range(10)])
+                    kernel_size=np.random.choice([2 * i + 1 for i in range(10)])
                 )
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomRotation(
-                    degrees=np.random.randint(0, 365))
+                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
@@ -234,19 +231,18 @@ class RegionClassifierTrainer(object):
         :return: None
         """
 
-        positive_sample_folder = os.path.join(folder_path, 'positive')
-        negative_sample_folder = os.path.join(folder_path, 'negative')
+        positive_sample_folder = os.path.join(folder_path, "positive")
+        negative_sample_folder = os.path.join(folder_path, "negative")
         data = []
 
         # For each image in the positive samples folder.
         for file_name in os.listdir(positive_sample_folder):
-            if not file_name.endswith('.png'):
+            if not file_name.endswith(".png"):
                 continue
 
             # Load region.
             region = cv2.imread(
-                os.path.join(positive_sample_folder,
-                             file_name), cv2.IMREAD_ANYDEPTH
+                os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
             )
             label = 1
 
@@ -254,23 +250,22 @@ class RegionClassifierTrainer(object):
             data.append([region.reshape(1, *region.shape), label])
 
         n_positive = len(data)
-        print('Loaded {} positive training samples.'.format(n_positive))
+        print("Loaded {} positive training samples.".format(n_positive))
 
         # For each image in the negative samples folder.
         for file_name in os.listdir(negative_sample_folder):
-            if not file_name.endswith('.png'):
+            if not file_name.endswith(".png"):
                 continue
 
             # Load region.
             region = cv2.imread(
-                os.path.join(negative_sample_folder,
-                             file_name), cv2.IMREAD_ANYDEPTH
+                os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
             )
             label = 0
             # Append region and negative label to dataset.
             data.append([region.reshape(1, *region.shape), label])
 
-        print('Loaded {} negative training samples.'.format(len(data) - n_positive))
+        print("Loaded {} negative training samples.".format(len(data) - n_positive))
 
         # Randomly shuffle all loaded samples.
         np.random.shuffle(data)
@@ -299,21 +294,25 @@ class RegionClassifierTrainer(object):
         """
 
         path = self.model_save_path
-        model_save_file = os.path.join(path, 'model_{}.pt'.format(epoch))
-        train_csv_path = 'data/region_training_losses.csv'
+        model_save_file = os.path.join(path, "model_{}.pt".format(epoch))
+        train_csv_path = "data/region_training_losses.csv"
 
         if not os.path.exists(path):
             os.makedirs(path)
 
         torch.save(self.model.state_dict(), model_save_file)
-        with open(train_csv_path, 'w') as f:
+        with open(train_csv_path, "w") as f:
             ls = self.losses
             f.write(
-                'Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n'
+                "Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n"
             )
             for i in range(epoch):
                 f.write(
-                    '{},{},{},{},{}\n'.format(
-                        ls['epoch'][i], ls['ta'][i], ls['va'][i], ls['tl'][i], ls['vl'][i],
+                    "{},{},{},{},{}\n".format(
+                        ls["epoch"][i],
+                        ls["ta"][i],
+                        ls["va"][i],
+                        ls["tl"][i],
+                        ls["vl"][i],
                     )
                 )

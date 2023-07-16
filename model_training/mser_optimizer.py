@@ -13,9 +13,9 @@ class MSEROptimizer(object):
         self.particle_locations = particle_locations
 
         for i in range(len(self.images)):
-            if self.images[i].dtype == 'uint16':
+            if self.images[i].dtype == "uint16":
                 img = np.divide(self.images[i], 256)
-                img = img.astype('uint8')
+                img = img.astype("uint8")
                 self.images[i] = img
 
         self.detector = RegionDetector(None)
@@ -30,25 +30,24 @@ class MSEROptimizer(object):
             self.save_filename = save_directory
 
         ranges = {
-            'delta': (1, 30),
-            'min_area': (100, 5000),
-            'max_area': (5000, 10000),
-            'max_variation': (0, 1),
-            'min_diversity': (0, 1),
-            'max_evolution': (0, 1000),
-            'area_threshold': (0, 1000),
-            'min_margin': (0, 1),
-            'edge_blur_size': (0, 1000),
+            "delta": (1, 30),
+            "min_area": (100, 5000),
+            "max_area": (5000, 10000),
+            "max_variation": (0, 1),
+            "min_diversity": (0, 1),
+            "max_evolution": (0, 1000),
+            "area_threshold": (0, 1000),
+            "min_margin": (0, 1),
+            "edge_blur_size": (0, 1000),
         }
 
-        optimizer = bayes_opt.BayesianOptimization(
-            self.evaluate, ranges, verbose=1)
+        optimizer = bayes_opt.BayesianOptimization(self.evaluate, ranges, verbose=1)
         optimizer.maximize(init_points=50, n_iter=self.num_iterations)
 
         if self.save_filename is not None:
-            saveDict = {'optimizer.max': optimizer.max}
+            saveDict = {"optimizer.max": optimizer.max}
             # Save .json file
-            with open(self.save_filename, 'w') as jsonFile:
+            with open(self.save_filename, "w") as jsonFile:
                 json.dump(saveDict, jsonFile)
 
     def evaluate(
