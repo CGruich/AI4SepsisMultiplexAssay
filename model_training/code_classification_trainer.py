@@ -9,7 +9,7 @@ from torchvision import transforms
 
 
 class CodeClassifierTrainer(object):
-    def __init__(self, codes=["1-1", "1-2", "1-3", "1-4", "1-5", "1-6", "1-7", "1-8", "1-9", "1-10"], 
+    def __init__(self, codes=["1-1", "1-2", "1-3", "1-4", "1-5", "1-6", "1-7", "1-8", "1-9", "1-10"],
                  model_save_path="data/models/code_classifier",
                  save_every_n=10,
                  batch_size=256,
@@ -21,7 +21,6 @@ class CodeClassifierTrainer(object):
 
         self.num_codes = n_codes
         # codes = ["1-1", "1-3", "1-12", "1-18", "2-10", "2-17"] # + ["invalid"]
-        
 
         self.code_map = {code: idx for idx, code in enumerate(codes)}
 
@@ -38,7 +37,8 @@ class CodeClassifierTrainer(object):
         self.losses = {"epoch": [], "ta": [], "va": [], "tl": [], "vl": []}
         self.patience = 5
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(
+            self.model.parameters(), lr=self.learning_rate)
         self.loss_fn = nn.BCELoss()
 
     def train(self):
@@ -99,7 +99,7 @@ class CodeClassifierTrainer(object):
                 print("NEW BEST ACCURACY", val_acc, epoch)
                 self.best_val_acc = val_acc
                 self.save_model(epoch)
-            
+
             if val_loss > best_val_loss:
                 patience -= 1
             else:
@@ -147,7 +147,8 @@ class CodeClassifierTrainer(object):
             # Cast batch to tensor for PyTorch.
             samples = torch.as_tensor(samples, dtype=torch.float32)
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
+                tf = transforms.RandomRotation(
+                    degrees=np.random.randint(0, 365))
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
@@ -165,7 +166,6 @@ class CodeClassifierTrainer(object):
             # if np.random.uniform(0, 1) < transform_prob:
             #     tf = transforms.RandomAdjustSharpness(sharpness_factor=np.random.uniform(0, 10))
             #     samples = tf(samples)
-
 
             labels = torch.as_tensor(labels, dtype=torch.float32)
 
@@ -233,20 +233,21 @@ class CodeClassifierTrainer(object):
         negative_sample_folder = os.path.join(folder_path, "negative")
         n_negative = 0
         data = []
-        label_counts = {key:0 for key in self.code_map.keys()}
+        label_counts = {key: 0 for key in self.code_map.keys()}
 
         # For each image in the positive samples folder.
         for file_name in os.listdir(positive_sample_folder):
             if not file_name.endswith(".png"):
-              continue
-                      
+                continue
+
             if "set" in file_name:
                 end = file_name.find("_")
                 code = file_name[:end].strip()
             else:
                 code = file_name[:file_name.find("(")].strip()
             # Load region.
-            region = cv2.imread(os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+            region = cv2.imread(os.path.join(
+                positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
             label = self.one_hot(self.code_map[code])
             label_counts[code] += 1
 
@@ -290,7 +291,8 @@ class CodeClassifierTrainer(object):
         for region, label in val_data:
             v_labels.append(label)
             v_regions.append(region)
-        self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32), torch.as_tensor(v_labels, dtype=torch.float32))
+        self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32),
+                         torch.as_tensor(v_labels, dtype=torch.float32))
 
     def save_model(self, epoch):
         """
@@ -311,9 +313,11 @@ class CodeClassifierTrainer(object):
         torch.save(self.model.state_dict(), model_save_file)
         with open(train_csv_path, 'w') as f:
             ls = self.losses
-            f.write("Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n")
+            f.write(
+                "Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n")
             for i in range(epoch):
-                f.write("{},{},{},{},{}\n".format(ls["epoch"][i], ls["ta"][i], ls["va"][i], ls["tl"][i], ls["vl"][i]))
+                f.write("{},{},{},{},{}\n".format(
+                    ls["epoch"][i], ls["ta"][i], ls["va"][i], ls["tl"][i], ls["vl"][i]))
 
     def one_hot(self, value):
         arr = [0 for _ in range(self.num_codes)]

@@ -27,7 +27,8 @@ class RegionClassifierTrainer(object):
         self.best_val_acc = 0
         self.patience = 10
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(
+            self.model.parameters(), lr=self.learning_rate)
         self.loss_fn = nn.BCELoss()
 
     def train(self):
@@ -107,7 +108,7 @@ class RegionClassifierTrainer(object):
         :param data: Array of samples to choose from. Either `self.train_data` or `self.val_data`
         :return: Batches of augmented samples and the appropriate labels.
         """
-        
+
         batches = []
         transform_prob = 0.2
 
@@ -123,48 +124,51 @@ class RegionClassifierTrainer(object):
 
             samples = []
             labels = []
-            
+
             # For each sample in the selected batch.
             for training_sample in batch:
                 # Append the augmented sample to the batch.
                 samples.append(training_sample[0])
-    
+
                 # Append the appropriate binary label for this sample to the batch.
                 label = (1, 0) if training_sample[1] == 0 else (0, 1)
                 labels.append(label)
-    
+
             # Cast batch to tensor for PyTorch.
             samples = torch.as_tensor(samples, dtype=torch.float32)
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.GaussianBlur(kernel_size=np.random.choice([2*i+1 for i in range(10)]))
+                tf = transforms.GaussianBlur(
+                    kernel_size=np.random.choice([2*i+1 for i in range(10)]))
                 samples = tf(samples)
-    
+
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
+                tf = transforms.RandomRotation(
+                    degrees=np.random.randint(0, 365))
                 samples = tf(samples)
-    
+
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomHorizontalFlip()
                 samples = tf(samples)
-    
+
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomVerticalFlip()
                 samples = tf(samples)
-    
+
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomAutocontrast()
                 samples = tf(samples)
-    
+
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomAdjustSharpness(sharpness_factor=np.random.uniform(0, 10))
+                tf = transforms.RandomAdjustSharpness(
+                    sharpness_factor=np.random.uniform(0, 10))
                 samples = tf(samples)
-    
+
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomInvert()
                 samples = tf(samples)
-    
+
             labels = torch.as_tensor(labels, dtype=torch.float32)
-            
+
             batches.append((samples, labels))
 
         # Return augmented batch.
@@ -231,10 +235,11 @@ class RegionClassifierTrainer(object):
         # For each image in the positive samples folder.
         for file_name in os.listdir(positive_sample_folder):
             if not file_name.endswith(".png"):
-              continue
+                continue
 
             # Load region.
-            region = cv2.imread(os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+            region = cv2.imread(os.path.join(
+                positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
             label = 1
 
             # Append region and positive label to dataset.
@@ -246,10 +251,11 @@ class RegionClassifierTrainer(object):
         # For each image in the negative samples folder.
         for file_name in os.listdir(negative_sample_folder):
             if not file_name.endswith(".png"):
-              continue
-            
+                continue
+
             # Load region.
-            region = cv2.imread(os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+            region = cv2.imread(os.path.join(
+                negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
             label = 0
             # Append region and negative label to dataset.
             data.append([region.reshape(1, *region.shape), label])
@@ -269,7 +275,8 @@ class RegionClassifierTrainer(object):
         for region, label in val_data:
             v_labels.append((1, 0) if label == 0 else (0, 1))
             v_regions.append(region)
-        self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32), torch.as_tensor(v_labels, dtype=torch.float32))
+        self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32),
+                         torch.as_tensor(v_labels, dtype=torch.float32))
 
     def save_model(self, epoch):
         """
@@ -289,6 +296,8 @@ class RegionClassifierTrainer(object):
         torch.save(self.model.state_dict(), model_save_file)
         with open(train_csv_path, 'w') as f:
             ls = self.losses
-            f.write("Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n")
+            f.write(
+                "Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n")
             for i in range(epoch):
-                f.write("{},{},{},{},{}\n".format(ls["epoch"][i], ls["ta"][i], ls["va"][i], ls["tl"][i], ls["vl"][i]))
+                f.write("{},{},{},{},{}\n".format(
+                    ls["epoch"][i], ls["ta"][i], ls["va"][i], ls["tl"][i], ls["vl"][i]))

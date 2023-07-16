@@ -11,11 +11,13 @@ from tqdm import tqdm
 from datetime import datetime
 
 # Prints augmented images out for debugging
-def print_images(sample_batch_tensor, 
-                          path: str = None,
-                          batch_id: str = None,
-                          # Activate image saving
-                          activate: bool = False):
+
+
+def print_images(sample_batch_tensor,
+                 path: str = None,
+                 batch_id: str = None,
+                 # Activate image saving
+                 activate: bool = False):
     if activate:
         if not os.path.exists(path):
             os.makedirs(path)
@@ -26,25 +28,27 @@ def print_images(sample_batch_tensor,
             filename = batch_id + "_" + str(image_index) + ".png"
             image_pil.save(os.path.join(path, filename))
 
+
 class CodeClassifierTrainerGPU(object):
-    def __init__(self, codes=None, 
+    def __init__(self, codes=None,
                  model_save_path="data/models/code_classifier",
                  save_every_n: int = 10,
                  batch_size: int = 256,
                  lr: float = 1e-5,
                  fc_size: int = 256,
                  fc_num: int = 2,
-                 dropout_rate: float = 0.1, 
+                 dropout_rate: float = 0.1,
                  verbose: bool = True,
                  log: bool = True,
                  timestamp: str = datetime.now().strftime("%m_%d_%y_%H:%M")):
-        
+
         # Prints out augmented images if set to true
         self.debug = False
 
         # CG: CPU or GPU, prioritizes GPU if available.
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        
+        self.device = torch.device(
+            "cuda:0" if torch.cuda.is_available() else "cpu")
+
         self.verbose = verbose
         self.test_data = None
         # Print availability to GPU
@@ -68,8 +72,9 @@ class CodeClassifierTrainerGPU(object):
         self.model.to(self.device)
         # Check if model is on GPU
         if self.verbose:
-            print("Model Loaded to GPU: " + str(next(self.model.parameters()).is_cuda))
-        
+            print("Model Loaded to GPU: " +
+                  str(next(self.model.parameters()).is_cuda))
+
         self.train_data = None
         self.val_data = None
 
@@ -79,7 +84,8 @@ class CodeClassifierTrainerGPU(object):
         # Let's just confirm the mapping between our class labels and internal label indexing,
         self.code_map = {code: idx for idx, code in enumerate(codes)}
         if self.verbose:
-            print(f"Code Map Between Sample Filenames and Internal Code Integer Designation:\n{self.code_map}")
+            print(
+                f"Code Map Between Sample Filenames and Internal Code Integer Designation:\n{self.code_map}")
 
         # Save the model at this path
         self.model_save_path = model_save_path
@@ -88,7 +94,7 @@ class CodeClassifierTrainerGPU(object):
 
         # Save the model results as a timestamp
         self.log_timestamp = timestamp
-        
+
         # Hyper-parameters.
         # Batch Size
         self.batch_size = batch_size
@@ -107,12 +113,12 @@ class CodeClassifierTrainerGPU(object):
         self.test_acc_for_best_val = 0
 
         # Store the training, validation, test accuracy and training, validation, test loss
-        self.losses = {"epoch": [], 
-                       "ta": [], 
-                       "va": [], 
-                       "test_acc": [], 
-                       "tl": [], 
-                       "vl": [], 
+        self.losses = {"epoch": [],
+                       "ta": [],
+                       "va": [],
+                       "test_acc": [],
+                       "tl": [],
+                       "vl": [],
                        "test_loss": []}
         # How many epochs to wait before stopping training if the model does not improve
         # This is an early-stopping hyperparameter
@@ -126,26 +132,28 @@ class CodeClassifierTrainerGPU(object):
         self.warmup = 20
 
         # Using the Adam optimizer
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(
+            self.model.parameters(), lr=self.learning_rate)
         # Cross Entropy Loss for multi-class problems
         self.loss_fn = nn.CrossEntropyLoss()
 
         # If logging via tensorboard, define a dedicated writer to log the results
         if self.log:
-            self.writer = SummaryWriter(os.path.join(self.model_save_path, self.log_timestamp, "logs"))
+            self.writer = SummaryWriter(os.path.join(
+                self.model_save_path, self.log_timestamp, "logs"))
 
-    def train(self, 
-              cross_validation=False, 
-              cross_validation_scores = None):
+    def train(self,
+              cross_validation=False,
+              cross_validation_scores=None):
         """
         Function to train a classifier on hologram regions.
         :return: None.
         """
         if cross_validation_scores is None:
-            cross_validation_scores = {"Val_Loss": [], 
-                                "Val_Acc": [], 
-                                "Test_Loss": [], 
-                                "Test_Acc": []}
+            cross_validation_scores = {"Val_Loss": [],
+                                       "Val_Acc": [],
+                                       "Test_Loss": [],
+                                       "Test_Acc": []}
         # Set the PyTorch model to training mode.
         self.model.train()
 
@@ -156,7 +164,7 @@ class CodeClassifierTrainerGPU(object):
         train_data = self.train_data
         patience = self.patience
         warmup = self.warmup
-        
+
         if self.log:
             writer = self.writer
         # Default loss should be infinite, as this corresponds to the worst possible value
@@ -178,8 +186,8 @@ class CodeClassifierTrainerGPU(object):
                 # Clear gradients
                 optimizer.zero_grad()
 
-                #print("TRAIN BATCH")
-                #print(batch)
+                # print("TRAIN BATCH")
+                # print(batch)
                 # Get the samples and labels
                 samples, labels = batch
                 # Moving the model to GPU is in-place, but moving the data is not.
@@ -188,7 +196,8 @@ class CodeClassifierTrainerGPU(object):
 
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
-                predicted_labels = ((torch.argmax(predictions, dim=1) + 1).float()).clone().detach().requires_grad_(True)
+                predicted_labels = ((torch.argmax(
+                    predictions, dim=1) + 1).float()).clone().detach().requires_grad_(True)
 
                 # Compute the loss and take one step along the gradient.
                 # Our barcodes are labelled from 1 ... N
@@ -214,12 +223,12 @@ class CodeClassifierTrainerGPU(object):
 
             if self.log:
                 # Write the loss and accuracies to tensorboard
-                writer.add_scalars("Loss", {"Train_Loss":train_loss, 
-                                            "Val_Loss":val_loss, 
-                                            "Test_Loss":test_loss}, epoch)
-                writer.add_scalars("Accuracy", {"Train_Acc":train_acc, 
-                                                "Val_Acc":val_acc, 
-                                                "Test_Acc":test_acc}, epoch)
+                writer.add_scalars("Loss", {"Train_Loss": train_loss,
+                                            "Val_Loss": val_loss,
+                                            "Test_Loss": test_loss}, epoch)
+                writer.add_scalars("Accuracy", {"Train_Acc": train_acc,
+                                                "Val_Acc": val_acc,
+                                                "Test_Acc": test_acc}, epoch)
                 writer.add_scalar("Train_Loss", train_loss, epoch)
                 writer.add_scalar("Train_Acc", train_acc, epoch)
                 writer.add_scalar("Val_Loss", val_loss, epoch)
@@ -237,7 +246,7 @@ class CodeClassifierTrainerGPU(object):
             self.losses["epoch"].append(epoch)
 
             # CG: Legacy Code
-            #print("EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
+            # print("EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
             #    epoch, train_loss, train_acc, val_loss, val_acc))
 
             # If enough epochs have passed that we need to save the model, do so.
@@ -247,7 +256,7 @@ class CodeClassifierTrainerGPU(object):
                 self.best_val_acc = val_acc
                 self.test_acc_for_best_val = test_acc
                 self.save_model(epoch)
-            
+
             # If our new loss is best,
             if val_loss <= (best_val_loss - self.early_stop_delta):
                 # Update the best loss with the new loss
@@ -258,31 +267,32 @@ class CodeClassifierTrainerGPU(object):
                 patience = self.patience
             # If the loss is greater than the best loss (i.e., the current minimum loss)
             else:
-            # If we are out of training patience and past the warmup stage,
+                # If we are out of training patience and past the warmup stage,
                 # If we are past the warmup stage,
                 if epoch > warmup:
                     # Lower the patience of how long to wait for the model accuracy to improve
                     patience -= 1
-            
+
             if patience == 0 and epoch > warmup:
                 break
 
             if epoch % self.save_every_n == 0:
                 self.save_model(epoch)
-        
+
         if self.log:
             # Save changes to hard drive and close tensorboard writer in memory.
             writer.flush()
             writer.close()
-        
+
         # If cross-validating, then add the current fold scores to the running cross-validation counts of accuracy and loss
         if cross_validation:
             cross_validation_scores["Val_Loss"].append(best_val_loss)
             cross_validation_scores["Val_Acc"].append(self.best_val_acc)
-            cross_validation_scores["Test_Loss"].append(self.test_loss_for_best_val)
-            cross_validation_scores["Test_Acc"].append(self.test_acc_for_best_val)
+            cross_validation_scores["Test_Loss"].append(
+                self.test_loss_for_best_val)
+            cross_validation_scores["Test_Acc"].append(
+                self.test_acc_for_best_val)
             return cross_validation_scores
-
 
     def generate_batches(self, data):
         """
@@ -306,8 +316,8 @@ class CodeClassifierTrainerGPU(object):
             batch = data[idxs]
 
             # CG: Enable if not work
-            #print("BATCH TO AUGMENT")
-            #print(batch)
+            # print("BATCH TO AUGMENT")
+            # print(batch)
 
             samples = []
             labels = []
@@ -322,14 +332,15 @@ class CodeClassifierTrainerGPU(object):
                 labels.append(label)
 
             # Cast batch to tensor for PyTorch.
-            samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
-            #print("Samples before Augmentation")
-            #print(samples)
+            samples = torch.as_tensor(
+                np.array(samples, dtype=np.int32), dtype=torch.float32)
+            # print("Samples before Augmentation")
+            # print(samples)
             print_images(samples,
                          path="data/classifier_training_samples/Data_Augmentation_Inspection/NoAugment",
                          batch_id=str(i),
                          activate=self.debug)
-            
+
             # Need to loop through and rotate all image samples in the batch and readd them to the list
             temp_samples = []
             if np.random.uniform(0, 1) < transform_prob:
@@ -337,19 +348,21 @@ class CodeClassifierTrainerGPU(object):
                     # Reshape to from (batch_size, channels, height, width) to (channels, height, width)
                     # Need to convert to Python Image Library (PIL) image representation for rotations to be proper
                     single_image = image.permute(0, 1, 2)
-                    #print("single_image")
-                    #print(single_image.shape)
+                    # print("single_image")
+                    # print(single_image.shape)
                     single_image_pil = transforms.ToPILImage()(single_image)
-                    tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
+                    tf = transforms.RandomRotation(
+                        degrees=np.random.randint(0, 365))
                     single_image_pil = tf(single_image_pil)
                     # Convert back to PyTorch tensor when done.
                     sample = transforms.ToTensor()(single_image_pil)
                     temp_samples.append(sample)
-                    
+
                 # Cast batch to tensor for PyTorch.
-                samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
-                #print("Samples after random rotation")
-                #print(samples)
+                samples = torch.as_tensor(
+                    np.array(samples, dtype=np.int32), dtype=torch.float32)
+                # print("Samples after random rotation")
+                # print(samples)
                 print_images(samples,
                              path="data/classifier_training_samples/Data_Augmentation_Inspection/Rotations",
                              batch_id=str(i),
@@ -358,30 +371,31 @@ class CodeClassifierTrainerGPU(object):
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomHorizontalFlip()
                 samples = tf(samples)
-                #print("Samples after random horizontal flip")
-                #print(samples)
+                # print("Samples after random horizontal flip")
+                # print(samples)
                 print_images(samples,
-                                    path="data/classifier_training_samples/Data_Augmentation_Inspection/HorizontalFlip",
-                                    batch_id=str(i),
-                                    activate=self.debug)
+                             path="data/classifier_training_samples/Data_Augmentation_Inspection/HorizontalFlip",
+                             batch_id=str(i),
+                             activate=self.debug)
 
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomVerticalFlip()
                 samples = tf(samples)
-                #print("Samples after random vertical flip")
-                #print(samples)
+                # print("Samples after random vertical flip")
+                # print(samples)
                 print_images(samples,
                              path="data/classifier_training_samples/Data_Augmentation_Inspection/VerticalFlip",
                              batch_id=str(i),
                              activate=self.debug)
 
-            labels = torch.as_tensor(np.array(labels, dtype=np.int32), dtype=torch.float32)
+            labels = torch.as_tensor(
+                np.array(labels, dtype=np.int32), dtype=torch.float32)
 
             # CG: Enable if not work
-            #print("Augmented samples")
-            #print(samples)
-            #print("Augmented Labels")
-            #print(labels)
+            # print("Augmented samples")
+            # print(samples)
+            # print("Augmented Labels")
+            # print(labels)
             batches.append((samples, labels))
 
         # Return augmented batch.
@@ -430,7 +444,7 @@ class CodeClassifierTrainerGPU(object):
 
         # Generate a random augmented batch of validation data.
         # samples, labels = self.generate_batch(self.val_data)
-        
+
         # Moving the model to GPU is in-place, but moving data is not.
         samples, labels = self.test_data
         samples = samples.to(self.device)
@@ -448,7 +462,7 @@ class CodeClassifierTrainerGPU(object):
 
         # Return the computed loss and accuracy values.
         return loss, acc
-    
+
     @torch.no_grad()
     def compute_accuracy(self, labels, predicted_labels):
         """
@@ -459,26 +473,26 @@ class CodeClassifierTrainerGPU(object):
         """
 
         predicted_labels = predicted_labels.argmax(dim=-1) + 1
-        #print("predicted_labels")
-        #print(predicted_labels)
-        #print("labels")
-        #print(labels)
+        # print("predicted_labels")
+        # print(predicted_labels)
+        # print("labels")
+        # print(labels)
 
         n_samples = labels.shape[0]
 
         n_correct = torch.where(predicted_labels == labels, 1, 0).sum()
 
         acc = 100*n_correct / n_samples
-        #print("acc")
-        #print(acc)
+        # print("acc")
+        # print(acc)
 
         return acc.item()
 
-    def load_data(self, folder_path: str, 
-                  train_dataset_np = None,
-                  train_targets_np = None, 
-                  train_idx = None,
-                  val_idx = None, 
+    def load_data(self, folder_path: str,
+                  train_dataset_np=None,
+                  train_targets_np=None,
+                  train_idx=None,
+                  val_idx=None,
                   test_dataset: np.ndarray = None):
         """
         Function to load all positive and negative samples given a folder. This assumes there are two folders inside the
@@ -498,7 +512,7 @@ class CodeClassifierTrainerGPU(object):
         train_targets = np.take(train_targets_np, train_idx, axis=0)
         val_data = np.take(train_dataset_np, val_idx, axis=0)
         val_targets = np.take(train_targets_np, val_idx, axis=0)
-        
+
         # Setting up validation dataset
         v_labels = []
         v_regions = []
@@ -506,8 +520,10 @@ class CodeClassifierTrainerGPU(object):
             v_labels.append(label)
             v_regions.append(np.array(region[0][0], dtype=np.float32))
 
-        v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.float32)
-        v_regions = torch.as_tensor(np.array(v_regions, dtype=np.int32), dtype=torch.float32)
+        v_labels = torch.as_tensor(
+            np.array(v_labels, dtype=np.int32), dtype=torch.float32)
+        v_regions = torch.as_tensor(
+            np.array(v_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(v_regions,
                      path="data/classifier_training_samples/Validation_Dataset/",
@@ -522,22 +538,24 @@ class CodeClassifierTrainerGPU(object):
         for region, label in zip(test_dataset, train_targets):
             t_labels.append(label)
             t_regions.append(np.array(region[0][0], dtype=np.float32))
-        t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.float32)
-        t_regions = torch.as_tensor(np.array(t_regions, dtype=np.int32), dtype=torch.float32)
+        t_labels = torch.as_tensor(
+            np.array(t_labels, dtype=np.int32), dtype=torch.float32)
+        t_regions = torch.as_tensor(
+            np.array(t_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(t_regions,
                      path="data/classifier_training_samples/Test_Dataset/",
                      batch_id="test",
                      activate=self.debug)
-        
+
         self.test_data = (t_regions, t_labels)
 
-        #print("self.train_data")
-        #print(self.train_data)
-        #print("self.val_data")
-        #print(self.val_data)
-        #print("self.test_data")
-        #print(self.test_data)
+        # print("self.train_data")
+        # print(self.train_data)
+        # print("self.val_data")
+        # print(self.val_data)
+        # print("self.test_data")
+        # print(self.test_data)
 
     def save_model(self, epoch):
         """
@@ -559,9 +577,11 @@ class CodeClassifierTrainerGPU(object):
         torch.save(self.model.state_dict(), model_save_file)
         with open(train_csv_path, 'w') as f:
             ls = self.losses
-            f.write("Epoch,Training Accuracy,Validation Accuracy,Test Accuracy,Training Loss,Validation Loss,Test Loss\n")
+            f.write(
+                "Epoch,Training Accuracy,Validation Accuracy,Test Accuracy,Training Loss,Validation Loss,Test Loss\n")
             for i in range(epoch):
-                f.write("{},{},{},{},{},{},{}\n".format(ls["epoch"][i], ls["ta"][i], ls["va"][i], ls["test_acc"][i], ls["tl"][i], ls["vl"][i], ls["test_loss"][i]))
+                f.write("{},{},{},{},{},{},{}\n".format(
+                    ls["epoch"][i], ls["ta"][i], ls["va"][i], ls["test_acc"][i], ls["tl"][i], ls["vl"][i], ls["test_loss"][i]))
 
     def one_hot(self, value):
         arr = [0 for _ in range(self.num_codes)]

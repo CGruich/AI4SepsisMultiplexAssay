@@ -7,7 +7,7 @@ from utils import helper_functions
 class RegionClassifier(nn.Module):
     def __init__(self, region_shape=(1, 128, 128), h1=128, dropout=0.5, verbose=True):
         super().__init__()
-        
+
         # Printing verbosity
         self.verbose = verbose
 
@@ -17,16 +17,18 @@ class RegionClassifier(nn.Module):
         self.h1 = h1
         # Controls dropout rate before fully connected layer
         self.dropout = dropout
-        
+
         self.conv_layers = [
             nn.BatchNorm2d(1),
-            nn.Conv2d(in_channels=1, out_channels=ch1, kernel_size=(6, 6), stride=(3, 3)),
+            nn.Conv2d(in_channels=1, out_channels=ch1,
+                      kernel_size=(6, 6), stride=(3, 3)),
             nn.PReLU(),
 
             nn.MaxPool2d(kernel_size=(2, 2)),
 
             nn.BatchNorm2d(ch1),
-            nn.Conv2d(in_channels=ch1, out_channels=ch2, kernel_size=(4, 4), stride=(2, 2)),
+            nn.Conv2d(in_channels=ch1, out_channels=ch2,
+                      kernel_size=(4, 4), stride=(2, 2)),
             nn.PReLU(),
 
             nn.MaxPool2d(kernel_size=(2, 2))
@@ -36,7 +38,8 @@ class RegionClassifier(nn.Module):
         # many features will remain when we finish passing the input through the convolutional layers. Once we know,
         # we can concatenate the output of the final convolutional layer into one long vector so we can pass it through
         # the feedforward layers for classification.
-        detected_conv_features = helper_functions.detect_conv_features(region_shape, self.conv_layers)
+        detected_conv_features = helper_functions.detect_conv_features(
+            region_shape, self.conv_layers)
         if self.verbose:
             print("FINAL VECTOR LENGTH:", detected_conv_features)
         self.ff_layers = [
@@ -54,7 +57,8 @@ class RegionClassifier(nn.Module):
     def forward(self, x):
         if type(x) != torch.Tensor:
             if type(x) != np.ndarray:
-                x = np.asarray(x).astype(np.float32)  # apparently faster to do this conversion first
+                # apparently faster to do this conversion first
+                x = np.asarray(x).astype(np.float32)
 
             x = torch.as_tensor(x, dtype=torch.float32)
         return self.model(x)
@@ -88,7 +92,7 @@ class RegionClassifier(nn.Module):
                 positive_idx.append(i)
             else:
                 negative_regions.append(region)
-        
+
         if return_picks:
             return positive_regions, negative_regions, positive_idx
 

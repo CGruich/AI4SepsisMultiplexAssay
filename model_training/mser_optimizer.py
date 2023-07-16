@@ -6,6 +6,7 @@ import cv2
 import bayes_opt
 from bayes_opt import SequentialDomainReductionTransformer
 
+
 class MSEROptimizer(object):
     def __init__(self, normalized_images, particle_locations, num_iterations):
         self.images = normalized_images
@@ -27,7 +28,7 @@ class MSEROptimizer(object):
     def train(self, save_directory: str = None):
         if save_directory is not None:
             self.save_filename = save_directory
-        
+
         ranges = {
             "delta": (1, 30),
             "min_area": (100, 5000),
@@ -39,9 +40,10 @@ class MSEROptimizer(object):
             "min_margin": (0, 1),
             "edge_blur_size": (0, 1000)}
 
-        optimizer = bayes_opt.BayesianOptimization(self.evaluate, ranges, verbose=1)
+        optimizer = bayes_opt.BayesianOptimization(
+            self.evaluate, ranges, verbose=1)
         optimizer.maximize(init_points=50, n_iter=self.num_iterations)
-        
+
         if self.save_filename is not None:
             saveDict = {"optimizer.max": optimizer.max}
             # Save .json file
@@ -66,7 +68,8 @@ class MSEROptimizer(object):
         # Detect blobs
         blobs = self.detector.mser_detect_blobs(img)
         # Extract stable regions
-        passed_contours = self.detector.extract_regions(blobs, img, return_passed_contours=True)
+        passed_contours = self.detector.extract_regions(
+            blobs, img, return_passed_contours=True)
         # Compute rectangles that best fits each region
         min_rotated_rects = [cv2.minAreaRect(blob) for blob in passed_contours]
         # Count the number of regions

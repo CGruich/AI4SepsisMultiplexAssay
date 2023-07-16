@@ -6,7 +6,8 @@ from scipy.signal import convolve2d
 
 def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=16):
     conv_window_size = conv_window_size
-    convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (conv_window_size * conv_window_size)
+    convolution_kernel = np.ones(
+        (conv_window_size, conv_window_size)) / (conv_window_size * conv_window_size)
     bit_depth = bit_depth
 
     hologram_image = hologram.astype(np.float32)
@@ -16,14 +17,16 @@ def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=1
     # at the current pixel. Then, we will compute the average value of every pixel in side this square, and set
     # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
     # image to use for normalization.
-    averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
+    averaged_reference_image = convolve2d(
+        reference_image, convolution_kernel, mode='same')
 
     # Normalize hologram by reference image.
     normalized_hologram = hologram_image / averaged_reference_image
 
     # Transform the normalized image into the appropriate bit-depth.
     grayscale_hologram = normalized_hologram * 2 ** 16
-    grayscale_hologram = grayscale_hologram.clip(0, 2 ** 16 - 1).astype('uint{}'.format(bit_depth))
+    grayscale_hologram = grayscale_hologram.clip(
+        0, 2 ** 16 - 1).astype('uint{}'.format(bit_depth))
     return grayscale_hologram
 
 
@@ -99,7 +102,8 @@ def non_max_suppression_fast(boxes, maximum_acceptable_overlap, return_picks=Fal
         overlap = (w * h) / area[idxs[:last]]
 
         # delete all indexes from the index list that exceed the maximum overlap threshold
-        idxs = np.delete(idxs, np.concatenate(([last], np.where(overlap > maximum_acceptable_overlap)[0])))
+        idxs = np.delete(idxs, np.concatenate(
+            ([last], np.where(overlap > maximum_acceptable_overlap)[0])))
 
     if return_picks:
         return boxes[pick].astype("int"), pick
