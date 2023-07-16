@@ -13,23 +13,21 @@ class RegionDetector(object):
     ):
         self.bbox_threshold = 0.5
         self.desired_region_shape = desired_region_shape
-        self.region_classifier = RegionClassifier(
-            region_shape=(1, *self.desired_region_shape)
-        )
+        self.region_classifier = RegionClassifier(region_shape=(1, *self.desired_region_shape))
         if model_load_path is not None:
             self.region_classifier.load_weights(model_load_path)
 
         if MSER_parameters is not None:
             self.MSER_parameters = (
-                round(MSER_parameters["delta"]),
-                round(MSER_parameters["min_area"]),
-                round(MSER_parameters["min_area"] + MSER_parameters["max_area"]),
-                MSER_parameters["max_variation"],
-                MSER_parameters["min_diversity"],
-                round(MSER_parameters["max_evolution"]),
-                round(MSER_parameters["area_threshold"]),
-                MSER_parameters["min_margin"],
-                round(MSER_parameters["edge_blur_size"]),
+                round(MSER_parameters['delta']),
+                round(MSER_parameters['min_area']),
+                round(MSER_parameters['min_area'] + MSER_parameters['max_area']),
+                MSER_parameters['max_variation'],
+                MSER_parameters['min_diversity'],
+                round(MSER_parameters['max_evolution']),
+                round(MSER_parameters['area_threshold']),
+                MSER_parameters['min_margin'],
+                round(MSER_parameters['edge_blur_size']),
             )
         else:
             # Determined from 13 images of Code 1 particles.
@@ -71,11 +69,9 @@ class RegionDetector(object):
         regions, _ = self.extract_regions(detected_blobs, grayscale_hologram)
 
         # Use a trained classifier to filter regions based on whether they contain an object of interest or not.
-        positive_regions, negative_regions = self.region_classifier.classify_regions(
-            regions
-        )
+        positive_regions, negative_regions = self.region_classifier.classify_regions(regions)
         print(
-            "Detected {} positive regions and {} negative regions from {} total detected regions.".format(
+            'Detected {} positive regions and {} negative regions from {} total detected regions.'.format(
                 len(positive_regions), len(negative_regions), len(regions)
             )
         )
@@ -118,17 +114,17 @@ class RegionDetector(object):
         vis = grayscale_hologram.copy()
         # Convert the copy to 8-bit.
         vis = np.divide(vis, 256)
-        vis = vis.astype("uint8")
+        vis = vis.astype('uint8')
         # Convert the copy to BGR format.
         vis = cv2.cvtColor(vis, cv2.COLOR_GRAY2BGR)
         for r in positive_recs:
             cv2.drawContours(vis, [r], 0, (0, 0, 65000), 1)
         if save_img_name is None:
-            save_img_name = "data/test/MSER Hulls.png"
+            save_img_name = 'data/test/MSER Hulls.png'
         cv2.imwrite(save_img_name, vis)
 
         print(
-            "Detected {} positive regions and {} negative regions from {} total detected regions.".format(
+            'Detected {} positive regions and {} negative regions from {} total detected regions.'.format(
                 len(positive_regions), len(negative_regions), len(regions)
             )
         )
@@ -152,9 +148,7 @@ class RegionDetector(object):
 
         return intensity
 
-    def mser_detect_blobs(
-        self, grayscale_hologram, draw_blobs=False, save_img_name=None
-    ):
+    def mser_detect_blobs(self, grayscale_hologram, draw_blobs=False, save_img_name=None):
         """
         Function to detect objects in a hologram with the MSER blob detection algorithm.
         :param grayscale_hologram: Normalized 16-bit grayscale hologram.
@@ -189,10 +183,10 @@ class RegionDetector(object):
 
         # MSER wants the image to have a bit-depth of 8, so we'll convert the 16-bit grayscale image we made earlier
         # to an 8-bit grayscale image here.
-        if grayscale_hologram.dtype == "uint16":
+        if grayscale_hologram.dtype == 'uint16':
             # 2^16 / 2^8 = 2^8
             img = np.divide(grayscale_hologram.astype(np.float32), 256)
-            img = img.astype("uint8")
+            img = img.astype('uint8')
         else:
             img = grayscale_hologram
 
@@ -218,31 +212,29 @@ class RegionDetector(object):
 
             # Convert the copy to 8-bit.
             vis = np.divide(vis, 256)
-            vis = vis.astype("uint8")
+            vis = vis.astype('uint8')
 
             # Convert the copy to BGR format.
             vis = cv2.cvtColor(vis, cv2.COLOR_GRAY2BGR)
 
             cv2.polylines(vis, blobs, 1, (0, 65000, 0))
 
-            passed_contours = self.extract_regions(
-                blobs, img, return_passed_contours=True
-            )
+            passed_contours = self.extract_regions(blobs, img, return_passed_contours=True)
             min_rotated_rects = [cv2.minAreaRect(blob) for blob in passed_contours]
 
             rects = [cv2.boxPoints(rect).astype(np.int32) for rect in min_rotated_rects]
-            print("detected", len(rects), "blobs")
+            print('detected', len(rects), 'blobs')
             for r in rects:
                 cv2.drawContours(vis, [r], 0, (0, 0, 65000), 2)
 
-            cv2.namedWindow("vis")
-            cv2.imshow("vis", cv2.resize(vis, (1920, 1080)))
-            cv2.moveWindow("vis", 0, 0)
+            cv2.namedWindow('vis')
+            cv2.imshow('vis', cv2.resize(vis, (1920, 1080)))
+            cv2.moveWindow('vis', 0, 0)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
             if save_img_name is None:
-                save_img_name = "data/test/MSER Hulls.png"
+                save_img_name = 'data/test/MSER Hulls.png'
             cv2.imwrite(save_img_name, vis)
 
             return blobs, rects
