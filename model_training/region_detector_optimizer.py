@@ -7,13 +7,13 @@ import bayes_opt
 
 class region_detector_optimizer(object):
     def __init__(self):
-        ""
+        """"""
 
     def __str__(self):
-        ""
+        """"""
 
     def train(self):
-        ""
+        """"""
 
     def evaluation(self):
-        ""
+        """"""

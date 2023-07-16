@@ -1,8 +1,10 @@
 # For getting directory names
 import os
 import os.path as osp
+
 # For executing bash statements
 import subprocess
+
 # For keeping timestamps of the archive
 import datetime
 
@@ -13,8 +15,10 @@ from itertools import product
 import pandas as pd
 
 
-def generate_grid_search_file(choice_list, choice_labels, choice_type, hyperparameter_lists, save_path=os.getcwd()):
-    '''Generate all possible combinations of hyperparameters given.
+def generate_grid_search_file(
+    choice_list, choice_labels, choice_type, hyperparameter_lists, save_path=os.getcwd()
+):
+    """Generate all possible combinations of hyperparameters given.
     choice_list: A list of string values. Holds the user inputted hyperparameters temporarily.
     choice_labels: A list of each hyperparameter name. Parallel with choice_list
     choice_type: A list of each datatype intended for each hyperparameter. Parallel with choice_list.
@@ -22,7 +26,7 @@ def generate_grid_search_file(choice_list, choice_labels, choice_type, hyperpara
     save_path: Where to save the hyperparameter trials
 
     Returns: hpo_trials_df, a dataframe of all hyperparameter combinations to try.
-    '''
+    """
 
     # Assert parallel lists are same length
     assert len(choice_list) == len(choice_labels)
@@ -34,7 +38,8 @@ def generate_grid_search_file(choice_list, choice_labels, choice_type, hyperpara
         while choice_list[choice_index] != "DONE":
             # Enter a value
             choice_list[choice_index] = input(
-                choice_labels[choice_index] + "\nEnter 'DONE' to exit.\n")
+                choice_labels[choice_index] + "\nEnter 'DONE' to exit.\n"
+            )
             assert type(choice_list[choice_index]) is str
 
             # If we are not done selecting values for a particular hyperparameter,
@@ -47,8 +52,11 @@ def generate_grid_search_file(choice_list, choice_labels, choice_type, hyperpara
                     converted = int(choice_list[choice_index])
                 # Otherwise, raise an exception because of unintended behavior
                 else:
-                    raise Exception("An unprogrammed datatype for hyperparameter " +
-                                    choice_labels[choice_index] + " was specified. See choice_type variable.")
+                    raise Exception(
+                        "An unprogrammed datatype for hyperparameter "
+                        + choice_labels[choice_index]
+                        + " was specified. See choice_type variable."
+                    )
                 assert converted is float or int
 
                 # Add the inputted hyperparameter value to the list of values to try for
@@ -72,12 +80,16 @@ def generate_grid_search_file(choice_list, choice_labels, choice_type, hyperpara
     print(len(hpo_trials))
 
     # Convert to PANDAS dataframe and save
-    hpo_trials_df = pd.DataFrame(hpo_trials, columns=choice_labels).sample(
-        frac=1).reset_index(drop=True)
+    hpo_trials_df = (
+        pd.DataFrame(hpo_trials, columns=choice_labels)
+        .sample(frac=1)
+        .reset_index(drop=True)
+    )
     hpo_trials_id = [i for i in range(hpo_trials_df.shape[0])]
     hpo_trials_df.insert(0, "hpoID", hpo_trials_id)
     hpo_trials_df.to_csv(
-        osp.join(save_path, "hpo_trials_region_classifier.csv"), index=False)
+        osp.join(save_path, "hpo_trials_region_classifier.csv"), index=False
+    )
     print(hpo_trials_df)
     return hpo_trials_df
 
@@ -99,14 +111,33 @@ weight_decay_beta1_choice = "initialized"
 epsilon_choice = "initialized"
 fc_choice = "initialized"
 
-choice_list = [batch_size_choice, lr_choice, dropout_choice,
-               weight_decay_beta1_choice, epsilon_choice, fc_choice]
-choice_labels = ["Batch_Size", "lr", "Dropout_Rate",
-                 "Weight_Decay_Beta1", "Epsilon", "FC_Size"]
+choice_list = [
+    batch_size_choice,
+    lr_choice,
+    dropout_choice,
+    weight_decay_beta1_choice,
+    epsilon_choice,
+    fc_choice,
+]
+choice_labels = [
+    "Batch_Size",
+    "lr",
+    "Dropout_Rate",
+    "Weight_Decay_Beta1",
+    "Epsilon",
+    "FC_Size",
+]
 choice_type = [int, float, float, float, float, int]
-hyperparameter_lists = [batch_size_list, lr_list,
-                        dropout_list, weight_decay_beta1_list, epsilon_list, fc_size]
+hyperparameter_lists = [
+    batch_size_list,
+    lr_list,
+    dropout_list,
+    weight_decay_beta1_list,
+    epsilon_list,
+    fc_size,
+]
 
 hpo_trials_df = generate_grid_search_file(
-    choice_list, choice_labels, choice_type, hyperparameter_lists)
+    choice_list, choice_labels, choice_type, hyperparameter_lists
+)
 print(hpo_trials_df)

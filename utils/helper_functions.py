@@ -6,8 +6,9 @@ from scipy.signal import convolve2d
 
 def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=16):
     conv_window_size = conv_window_size
-    convolution_kernel = np.ones(
-        (conv_window_size, conv_window_size)) / (conv_window_size * conv_window_size)
+    convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (
+        conv_window_size * conv_window_size
+    )
     bit_depth = bit_depth
 
     hologram_image = hologram.astype(np.float32)
@@ -18,15 +19,17 @@ def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=1
     # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
     # image to use for normalization.
     averaged_reference_image = convolve2d(
-        reference_image, convolution_kernel, mode='same')
+        reference_image, convolution_kernel, mode="same"
+    )
 
     # Normalize hologram by reference image.
     normalized_hologram = hologram_image / averaged_reference_image
 
     # Transform the normalized image into the appropriate bit-depth.
-    grayscale_hologram = normalized_hologram * 2 ** 16
-    grayscale_hologram = grayscale_hologram.clip(
-        0, 2 ** 16 - 1).astype('uint{}'.format(bit_depth))
+    grayscale_hologram = normalized_hologram * 2**16
+    grayscale_hologram = grayscale_hologram.clip(0, 2**16 - 1).astype(
+        "uint{}".format(bit_depth)
+    )
     return grayscale_hologram
 
 
@@ -102,8 +105,10 @@ def non_max_suppression_fast(boxes, maximum_acceptable_overlap, return_picks=Fal
         overlap = (w * h) / area[idxs[:last]]
 
         # delete all indexes from the index list that exceed the maximum overlap threshold
-        idxs = np.delete(idxs, np.concatenate(
-            ([last], np.where(overlap > maximum_acceptable_overlap)[0])))
+        idxs = np.delete(
+            idxs,
+            np.concatenate(([last], np.where(overlap > maximum_acceptable_overlap)[0])),
+        )
 
     if return_picks:
         return boxes[pick].astype("int"), pick
@@ -138,14 +143,14 @@ def expand_bbox(bbox, desired_dims, image_boundary):
 
     # Force y1 to be the smallest of the y values. Shift y1 by half of the necessary expansion.
     # Bound y1 to a minimum of 0.
-    y1 = max(int(round(min(y1, y2) - height_expansion / 2.)), 0)
+    y1 = max(int(round(min(y1, y2) - height_expansion / 2.0)), 0)
 
     # Force y2 to be the largest of the y values. Shift y2 by half the necessary expansion. Bound y2 to a maximum of h.
-    y2 = min(int(round(max(y1, y2) + height_expansion / 2.)), h)
+    y2 = min(int(round(max(y1, y2) + height_expansion / 2.0)), h)
 
     # These two lines are a repeat of the above y1,y2 calculations but with x and w instead of y and h.
-    x1 = max(int(round(min(x1, x2) - width_expansion / 2.)), 0)
-    x2 = min(int(round(max(x1, x2) + width_expansion / 2.)), w)
+    x1 = max(int(round(min(x1, x2) - width_expansion / 2.0)), 0)
+    x2 = min(int(round(max(x1, x2) + width_expansion / 2.0)), w)
 
     # Calculate the center point of the newly reshaped box, truncated.
     cx = x1 + abs(x1 - x2) // 2

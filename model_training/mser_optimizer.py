@@ -13,9 +13,9 @@ class MSEROptimizer(object):
         self.particle_locations = particle_locations
 
         for i in range(len(self.images)):
-            if self.images[i].dtype == 'uint16':
+            if self.images[i].dtype == "uint16":
                 img = np.divide(self.images[i], 256)
-                img = img.astype('uint8')
+                img = img.astype("uint8")
                 self.images[i] = img
 
         self.detector = RegionDetector(None)
@@ -38,10 +38,10 @@ class MSEROptimizer(object):
             "max_evolution": (0, 1000),
             "area_threshold": (0, 1000),
             "min_margin": (0, 1),
-            "edge_blur_size": (0, 1000)}
+            "edge_blur_size": (0, 1000),
+        }
 
-        optimizer = bayes_opt.BayesianOptimization(
-            self.evaluate, ranges, verbose=1)
+        optimizer = bayes_opt.BayesianOptimization(self.evaluate, ranges, verbose=1)
         optimizer.maximize(init_points=50, n_iter=self.num_iterations)
 
         if self.save_filename is not None:
@@ -50,10 +50,30 @@ class MSEROptimizer(object):
             with open(self.save_filename, "w") as jsonFile:
                 json.dump(saveDict, jsonFile)
 
-    def evaluate(self, delta, min_area, max_area, max_variation, min_diversity, max_evolution, area_threshold, min_margin, edge_blur_size):
+    def evaluate(
+        self,
+        delta,
+        min_area,
+        max_area,
+        max_variation,
+        min_diversity,
+        max_evolution,
+        area_threshold,
+        min_margin,
+        edge_blur_size,
+    ):
         # Update MSER parameters
-        self.detector.MSER_parameters = (round(delta), round(min_area), round(min_area + max_area), max_variation, min_diversity,
-                                         round(max_evolution), round(area_threshold), min_margin, round(edge_blur_size))
+        self.detector.MSER_parameters = (
+            round(delta),
+            round(min_area),
+            round(min_area + max_area),
+            max_variation,
+            min_diversity,
+            round(max_evolution),
+            round(area_threshold),
+            min_margin,
+            round(edge_blur_size),
+        )
 
         # Compute the average score of these MSER parameters on each image in our dataset.
         mean_score = 0
@@ -69,7 +89,8 @@ class MSEROptimizer(object):
         blobs = self.detector.mser_detect_blobs(img)
         # Extract stable regions
         passed_contours = self.detector.extract_regions(
-            blobs, img, return_passed_contours=True)
+            blobs, img, return_passed_contours=True
+        )
         # Compute rectangles that best fits each region
         min_rotated_rects = [cv2.minAreaRect(blob) for blob in passed_contours]
         # Count the number of regions

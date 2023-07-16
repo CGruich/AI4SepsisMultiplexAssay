@@ -27,8 +27,7 @@ class RegionClassifierTrainer(object):
         self.best_val_acc = 0
         self.patience = 10
 
-        self.optimizer = optim.Adam(
-            self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.loss_fn = nn.BCELoss()
 
     def train(self):
@@ -50,7 +49,7 @@ class RegionClassifierTrainer(object):
         best_val_loss = np.inf
 
         # For each epoch
-        for epoch in range(self.n_epochs+1):
+        for epoch in range(self.n_epochs + 1):
             train_acc = 0
             train_loss = 0
 
@@ -81,8 +80,11 @@ class RegionClassifierTrainer(object):
             self.losses["vl"].append(val_loss)
             self.losses["epoch"].append(epoch)
 
-            print("EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
-                  epoch, train_loss, train_acc, val_loss, val_acc))
+            print(
+                "EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
+                    epoch, train_loss, train_acc, val_loss, val_acc
+                )
+            )
 
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:
@@ -117,9 +119,9 @@ class RegionClassifierTrainer(object):
         np.random.shuffle(indices)
 
         bs = self.batch_size
-        for i in range(len(data)//bs):
+        for i in range(len(data) // bs):
             # Choose our random batch.
-            idxs = indices[i*bs:i*bs+bs]
+            idxs = indices[i * bs : i * bs + bs]
             batch = data[idxs]
 
             samples = []
@@ -138,12 +140,12 @@ class RegionClassifierTrainer(object):
             samples = torch.as_tensor(samples, dtype=torch.float32)
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.GaussianBlur(
-                    kernel_size=np.random.choice([2*i+1 for i in range(10)]))
+                    kernel_size=np.random.choice([2 * i + 1 for i in range(10)])
+                )
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomRotation(
-                    degrees=np.random.randint(0, 365))
+                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
@@ -160,7 +162,8 @@ class RegionClassifierTrainer(object):
 
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.RandomAdjustSharpness(
-                    sharpness_factor=np.random.uniform(0, 10))
+                    sharpness_factor=np.random.uniform(0, 10)
+                )
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
@@ -214,7 +217,7 @@ class RegionClassifierTrainer(object):
         n_samples = labels.shape[0]
 
         diff = (predicted_labels - known_labels).abs().sum()
-        acc = 100*(n_samples - diff) / n_samples
+        acc = 100 * (n_samples - diff) / n_samples
         return acc.item()
 
     def load_data(self, folder_path):
@@ -238,8 +241,9 @@ class RegionClassifierTrainer(object):
                 continue
 
             # Load region.
-            region = cv2.imread(os.path.join(
-                positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+            region = cv2.imread(
+                os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+            )
             label = 1
 
             # Append region and positive label to dataset.
@@ -254,8 +258,9 @@ class RegionClassifierTrainer(object):
                 continue
 
             # Load region.
-            region = cv2.imread(os.path.join(
-                negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+            region = cv2.imread(
+                os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+            )
             label = 0
             # Append region and negative label to dataset.
             data.append([region.reshape(1, *region.shape), label])
@@ -266,7 +271,7 @@ class RegionClassifierTrainer(object):
         np.random.shuffle(data)
 
         # Split resulting dataset into training and validation sets.
-        split = int(round(len(data)*self.val_split))
+        split = int(round(len(data) * self.val_split))
         self.train_data = np.asarray(data[split:])
         val_data = np.asarray(data[:split])
 
@@ -275,8 +280,10 @@ class RegionClassifierTrainer(object):
         for region, label in val_data:
             v_labels.append((1, 0) if label == 0 else (0, 1))
             v_regions.append(region)
-        self.val_data = (torch.as_tensor(v_regions, dtype=torch.float32),
-                         torch.as_tensor(v_labels, dtype=torch.float32))
+        self.val_data = (
+            torch.as_tensor(v_regions, dtype=torch.float32),
+            torch.as_tensor(v_labels, dtype=torch.float32),
+        )
 
     def save_model(self, epoch):
         """
@@ -294,10 +301,18 @@ class RegionClassifierTrainer(object):
             os.makedirs(path)
 
         torch.save(self.model.state_dict(), model_save_file)
-        with open(train_csv_path, 'w') as f:
+        with open(train_csv_path, "w") as f:
             ls = self.losses
             f.write(
-                "Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n")
+                "Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n"
+            )
             for i in range(epoch):
-                f.write("{},{},{},{},{}\n".format(
-                    ls["epoch"][i], ls["ta"][i], ls["va"][i], ls["tl"][i], ls["vl"][i]))
+                f.write(
+                    "{},{},{},{},{}\n".format(
+                        ls["epoch"][i],
+                        ls["ta"][i],
+                        ls["va"][i],
+                        ls["tl"][i],
+                        ls["vl"][i],
+                    )
+                )
