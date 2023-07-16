@@ -18,7 +18,8 @@ def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=1
     # at the current pixel. Then, we will compute the average value of every pixel in side this square, and set
     # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
     # image to use for normalization.
-    averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
+    averaged_reference_image = convolve2d(
+        reference_image, convolution_kernel, mode='same')
 
     # Normalize hologram by reference image.
     normalized_hologram = hologram_image / averaged_reference_image
@@ -104,7 +105,8 @@ def non_max_suppression_fast(boxes, maximum_acceptable_overlap, return_picks=Fal
 
         # delete all indexes from the index list that exceed the maximum overlap threshold
         idxs = np.delete(
-            idxs, np.concatenate(([last], np.where(overlap > maximum_acceptable_overlap)[0])),
+            idxs, np.concatenate(
+                ([last], np.where(overlap > maximum_acceptable_overlap)[0])),
         )
 
     if return_picks:
