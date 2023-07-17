@@ -27,7 +27,8 @@ class RegionClassifierTrainer(object):
         self.best_val_acc = 0
         self.patience = 10
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(
+            self.model.parameters(), lr=self.learning_rate)
         self.loss_fn = nn.BCELoss()
 
     def train(self):
@@ -121,7 +122,7 @@ class RegionClassifierTrainer(object):
         bs = self.batch_size
         for i in range(len(data) // bs):
             # Choose our random batch.
-            idxs = indices[i * bs : i * bs + bs]
+            idxs = indices[i * bs: i * bs + bs]
             batch = data[idxs]
 
             samples = []
@@ -140,12 +141,14 @@ class RegionClassifierTrainer(object):
             samples = torch.as_tensor(samples, dtype=torch.float32)
             if np.random.uniform(0, 1) < transform_prob:
                 tf = transforms.GaussianBlur(
-                    kernel_size=np.random.choice([2 * i + 1 for i in range(10)])
+                    kernel_size=np.random.choice(
+                        [2 * i + 1 for i in range(10)])
                 )
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
+                tf = transforms.RandomRotation(
+                    degrees=np.random.randint(0, 365))
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
@@ -242,7 +245,8 @@ class RegionClassifierTrainer(object):
 
             # Load region.
             region = cv2.imread(
-                os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+                os.path.join(positive_sample_folder,
+                             file_name), cv2.IMREAD_ANYDEPTH
             )
             label = 1
 
@@ -259,7 +263,8 @@ class RegionClassifierTrainer(object):
 
             # Load region.
             region = cv2.imread(
-                os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+                os.path.join(negative_sample_folder,
+                             file_name), cv2.IMREAD_ANYDEPTH
             )
             label = 0
             # Append region and negative label to dataset.
