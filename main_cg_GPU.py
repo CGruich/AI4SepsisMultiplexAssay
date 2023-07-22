@@ -192,9 +192,16 @@ def find_mser_params(pipeline_inputs: dict):
     )
 
     for code in code_list:
-        # The directory of all the raw images for a particular code (e.g., (1))
-        code_raw_directory = os.path.join(raw_directory, 'code ' + code)
-        print(f'Examining Code {code}\n{code_raw_directory}')
+        # If we are processing colored images of the barcoded particles,
+        if pipeline_inputs['color']:
+            # The directory of all the raw images for a particular code color (e.g., (1))
+            code_raw_directory = os.path.join(raw_directory, 'code ' + code + ' color')
+            print(f'Examining Code {code}\n{code_raw_directory}')
+        # Or if we are processing greyscale images of the barcoded particles,
+        else:
+            # The directory of all the raw images for a particular code (e.g., (1))
+            code_raw_directory = os.path.join(raw_directory, 'code ' + code)
+            print(f'Examining Code {code}\n{code_raw_directory}')
 
         # Load
         # Image naming convention: 1.tiff or (for a reference image) 1_ref.tiff
@@ -204,12 +211,15 @@ def find_mser_params(pipeline_inputs: dict):
         for file_name in os.listdir(code_raw_directory):
             if 'amp' in file_name or 'phase' in file_name or 'MSER' in file_name:
                 continue
-
-            if 'ref' in file_name:
+            
+            # Old code made MSER params for each image, but this is now changed
+            # Here, we restrict MSER param searching to '1.tiff' and '1_ref.tiff' with each code.
+            # We then take the MSER params from these images and use them as MSER params for the code.
+            if ('1_ref.tiff' == file_name) or ('1_1_ref.tiff' == file_name):
                 reference_img_names.append(file_name)
             elif 'particle_locations' in file_name:
                 particle_location_names.append(file_name)
-            else:
+            elif ('1.tiff' == file_name) or ('1_1.tiff' == file_name):
                 raw_img_names.append(file_name)
 
         # Image filenames will be loaded in parallel. e.g., "1.tiff" will be loaded with its own reference image "1_ref.tiff"
@@ -995,26 +1005,26 @@ if __name__ == '__main__':
 
     # print("Fds")
     args = parser.parse_args()
-    # action = args.action
-    # dir = args.dir
-    # reg_path = args.reg_path
-    # code_path = args.code_path
-    # pipeline_inputs = args.pipeline_inputs
+    action = args.action
+    dir = args.dir
+    reg_path = args.reg_path
+    code_path = args.code_path
+    pipeline_inputs = args.pipeline_inputs
 
-    action = 'find_mser_params'
-    pipeline_inputs = {
-        'number_iterations': 1000,
-        'raw_directory': 'C:/Users/jane/Desktop/particle_location_jsons',
-        'mser_save_directory': 'C:/Users/jane/Desktop/particle_location_jsons/mser_hyperparameters',
-        'code_list': ['1'],
-    }
+    #action = 'find_mser_params'
+    #pipeline_inputs = {
+    #    'number_iterations': 1000,
+    #    'raw_directory': 'C:/Users/jane/Desktop/particle_location_jsons',
+    #    'mser_save_directory': 'C:/Users/jane/Desktop/particle_location_jsons/mser_hyperparameters',
+    #    'code_list': ['1'],
+    #}
 
     # Controls the functionality of the pipeline Jupter notebooks
     # -----------------------------------------------------------------
-    # if args.pipeline_inputs is not None:
-    #     # Loads the inputs to the pipeline if specified
-    #     with open(pipeline_inputs, "r") as inputFile:
-    #         pipeline_inputs = json.load(inputFile)
+    if args.pipeline_inputs is not None:
+         # Loads the inputs to the pipeline if specified
+         with open(pipeline_inputs, "r") as inputFile:
+             pipeline_inputs = json.load(inputFile)
     # ------------------------------------------------------------------
 
     if action == 'find_mser_params':

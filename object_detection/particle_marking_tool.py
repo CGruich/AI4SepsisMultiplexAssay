@@ -99,6 +99,7 @@ class ParticleMarkingTool(object):
 
 
 if __name__ == '__main__':
-    folder_path = 'C:/Users/jane/Desktop/particle_location_jsons/code 1'
+    #folder_path = 'C:/Users/jane/Desktop/particle_location_jsons/code 1'
+    folder_path = '/home/cameron/Dropbox (University of Michigan)/DL_training/particle_markings'
     tool = ParticleMarkingTool()
     tool.mark_particles(folder_path)
