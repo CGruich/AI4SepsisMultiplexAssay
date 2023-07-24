@@ -5,6 +5,7 @@ from optuna.trial import TrialState
 import numpy as np
 import pickle
 
+
 def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
     # Currently only implemented for the Jupyter notebook pipeline,
     assert pipeline_inputs is not None
@@ -33,9 +34,11 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
                     callbacks=[pruning_callback])"""
 
     # Get the pruned trials (trials pruned prematurely)
-    pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
+    pruned_trials = study.get_trials(
+        deepcopy=False, states=[TrialState.PRUNED])
     # Get the completed trials
-    complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
+    complete_trials = study.get_trials(
+        deepcopy=False, states=[TrialState.COMPLETE])
 
     # Summarize
     print('\n\nStudy statistics: ')
@@ -53,6 +56,8 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
         print('    {}: {}'.format(key, value))
 
 # Objective function for Bayesian optimization with OpTuna
+
+
 def objective_code_classifier(trial, pipeline_inputs: dict = None):
     # Learning rate
     lr = trial.suggest_float('learning_rate', 1e-8, 1e-2)
@@ -66,7 +71,8 @@ def objective_code_classifier(trial, pipeline_inputs: dict = None):
     dr = trial.suggest_float('dropout_rate', 0.0, 0.8)
 
     # Dictionary of hyperparameters
-    hyper_dict = {'lr': lr, 'bs': bs, 'fcSize': fcSize, 'fcNum': fcNum, 'dr': dr}
+    hyper_dict = {'lr': lr, 'bs': bs,
+                  'fcSize': fcSize, 'fcNum': fcNum, 'dr': dr}
 
     # Run stratified k-fold cross-validation with the hyperparameters
     # Via the pipeline functionality of the workflow,
