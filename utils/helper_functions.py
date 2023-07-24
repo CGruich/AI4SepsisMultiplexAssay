@@ -10,6 +10,7 @@ import csv
 import itertools
 import re as regex
 
+
 def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=16):
     conv_window_size = conv_window_size
     convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (
@@ -24,7 +25,8 @@ def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=1
     # at the current pixel. Then, we will compute the average value of every pixel in side this square, and set
     # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
     # image to use for normalization.
-    averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
+    averaged_reference_image = convolve2d(
+        reference_image, convolution_kernel, mode='same')
 
     # Normalize hologram by reference image.
     normalized_hologram = hologram_image / averaged_reference_image
@@ -110,7 +112,8 @@ def non_max_suppression_fast(boxes, maximum_acceptable_overlap, return_picks=Fal
 
         # delete all indexes from the index list that exceed the maximum overlap threshold
         idxs = np.delete(
-            idxs, np.concatenate(([last], np.where(overlap > maximum_acceptable_overlap)[0])),
+            idxs, np.concatenate(
+                ([last], np.where(overlap > maximum_acceptable_overlap)[0])),
         )
 
     if return_picks:
@@ -161,6 +164,7 @@ def expand_bbox(bbox, desired_dims, image_boundary):
 
     return x1, y1, x2, y2, cx, cy
 
+
 def load_data(folder_path, verbose=True):
     positive_sample_folder = os.path.join(folder_path, 'positive')
     negative_sample_folder = os.path.join(folder_path, 'negative')
@@ -173,7 +177,8 @@ def load_data(folder_path, verbose=True):
 
         # Load region.
         region = cv2.imread(
-            os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+            os.path.join(positive_sample_folder,
+                         file_name), cv2.IMREAD_ANYDEPTH
         )
         label = 1
 
@@ -192,7 +197,8 @@ def load_data(folder_path, verbose=True):
 
         # Load region.
         region = cv2.imread(
-            os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+            os.path.join(negative_sample_folder,
+                         file_name), cv2.IMREAD_ANYDEPTH
         )
         label = 0
         # Append region and negative label to dataset.
@@ -203,6 +209,7 @@ def load_data(folder_path, verbose=True):
 
     # Return dataset
     return data
+
 
 def sort_alphanumeric(string_list):
     assert hasattr(string_list, 'sort'), 'ERROR! TYPE {} DOES NOT HAVE A SORT FUNCTION'.format(
@@ -220,6 +227,7 @@ def sort_alphanumeric(string_list):
 
     string_list.sort(key=sorting_key)
 
+
 def load_code(code_folder_path, verbose=True):
     code_sample_folder = os.path.join(code_folder_path, 'positive')
     data = []
@@ -236,7 +244,8 @@ def load_code(code_folder_path, verbose=True):
             continue
 
         # Load region.
-        region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+        region = cv2.imread(os.path.join(
+            code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
         try:
             label = int(file_name[0:2].strip('()'))
             assert label == code_designation
@@ -255,12 +264,13 @@ def load_code(code_folder_path, verbose=True):
     # Return dataset for one code
     return data
 
+
 def get_intensity(
     img_folder='/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)',
     region_detector_path='data/best/best_region_classifier.pt',
 ):
     region_detector = RegionDetector(model_load_path=region_detector_path)
-    folder_name = img_folder[img_folder.rfind('/') + 1 :]
+    folder_name = img_folder[img_folder.rfind('/') + 1:]
     holograms = []
 
     for ref_name in os.listdir(img_folder):
@@ -268,7 +278,8 @@ def get_intensity(
             continue
         if 'ref' in ref_name:
             print('referencing: ', ref_name)
-            reference = cv2.imread('{}/{}'.format(img_folder, ref_name), cv2.IMREAD_ANYDEPTH)
+            reference = cv2.imread(
+                '{}/{}'.format(img_folder, ref_name), cv2.IMREAD_ANYDEPTH)
 
             for image_name in os.listdir(img_folder):
                 code = ref_name.replace('_ref.tiff', "")
@@ -278,10 +289,12 @@ def get_intensity(
                     and 'ref' not in image_name
                 ):
                     hologram = cv2.imread(
-                        '{}/{}'.format(img_folder, image_name), cv2.IMREAD_ANYDEPTH
+                        '{}/{}'.format(img_folder,
+                                       image_name), cv2.IMREAD_ANYDEPTH
                     )
                     hologram = hologram.astype(np.float32)
-                    holograms.append((hologram, image_name.replace('.tiff', ""), reference))
+                    holograms.append(
+                        (hologram, image_name.replace('.tiff', ""), reference))
 
     intensities = []
     file_names = []
@@ -290,18 +303,22 @@ def get_intensity(
         holo, name, reference = hologram
         if not os.path.exists('data/hulls'):
             os.makedirs('data/hulls')
-        save_img_name = 'data/hulls/{}_{}_regions.png'.format(folder_name, name)
+        save_img_name = 'data/hulls/{}_{}_regions.png'.format(
+            folder_name, name)
         print('processing', name)
-        intensity = region_detector.get_intensity(holo, reference, save_img_name=save_img_name)
+        intensity = region_detector.get_intensity(
+            holo, reference, save_img_name=save_img_name)
         intensities.append(intensity)
         file_names += [folder_name + '/' + name, "", ""]
 
     # write to a csv file
-    intensities = list(itertools.zip_longest(*intensities, fillvalue=["", "", ""]))
+    intensities = list(itertools.zip_longest(
+        *intensities, fillvalue=["", "", ""]))
     intensities = [list(itertools.chain(*x)) for x in intensities]
 
     intensities = (
-        [file_names] + [['x', 'y', 'intensity'] * int(int(len(file_names)) / 3)] + intensities
+        [file_names] + [['x', 'y', 'intensity'] *
+                        int(int(len(file_names)) / 3)] + intensities
     )
 
     if not os.path.exists('data/intensities'):
