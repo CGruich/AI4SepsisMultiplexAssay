@@ -2,7 +2,13 @@ import numpy as np
 import torch.nn as nn
 import torch
 from scipy.signal import convolve2d
-
+from object_detection import RegionDetector
+import cv2
+import numpy as np
+import os
+import csv
+import itertools
+import re as regex
 
 def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=16):
     conv_window_size = conv_window_size
@@ -154,3 +160,153 @@ def expand_bbox(bbox, desired_dims, image_boundary):
     cy = y1 + abs(y1 - y2) // 2
 
     return x1, y1, x2, y2, cx, cy
+
+def load_data(folder_path, verbose=True):
+    positive_sample_folder = os.path.join(folder_path, 'positive')
+    negative_sample_folder = os.path.join(folder_path, 'negative')
+    data = []
+
+    # For each image in the positive samples folder.
+    for file_name in os.listdir(positive_sample_folder):
+        if not file_name.endswith('.png'):
+            continue
+
+        # Load region.
+        region = cv2.imread(
+            os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+        )
+        label = 1
+
+        # Append region and positive label to dataset.
+        data.append([region.reshape(1, *region.shape), label])
+
+    n_positive = len(data)
+
+    if verbose:
+        print('Loaded {} positive training samples.'.format(n_positive))
+
+    # For each image in the negative samples folder.
+    for file_name in os.listdir(negative_sample_folder):
+        if not file_name.endswith('.png'):
+            continue
+
+        # Load region.
+        region = cv2.imread(
+            os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+        )
+        label = 0
+        # Append region and negative label to dataset.
+        data.append([region.reshape(1, *region.shape), label])
+
+    if verbose:
+        print('Loaded {} negative training samples.'.format(len(data) - n_positive))
+
+    # Return dataset
+    return data
+
+def sort_alphanumeric(string_list):
+    assert hasattr(string_list, 'sort'), 'ERROR! TYPE {} DOES NOT HAVE A SORT FUNCTION'.format(
+        type(string_list)
+    )
+    """
+    Function to sort a list of strings in alphanumeric order.
+    Example: the list ['b1','a1','b2','a3','b3','a2'] will be sorted as ['a1', 'a2', 'a3', 'b1', 'b2', 'b3']
+
+    :param string_list: list of strings to sort.
+    """
+
+    def sorting_key(x):
+        return [int(c) if type(c) == int else c for c in regex.split('(-*[0-9]+)', x)]
+
+    string_list.sort(key=sorting_key)
+
+def load_code(code_folder_path, verbose=True):
+    code_sample_folder = os.path.join(code_folder_path, 'positive')
+    data = []
+    try:
+        code_designation = int(code_folder_path[-3:].strip('()'))
+    except:
+        print(
+            '\n\nFAILURE OBTAINING DESIGNATED CODE LABEL FROM THE PARENT FOLDER PATH.\nThe parent folder name may not have been correctly labelled.'
+        )
+
+    # For each image in the code's positive samples folder,
+    for file_name in os.listdir(code_sample_folder):
+        if not file_name.endswith('.png'):
+            continue
+
+        # Load region.
+        region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+        try:
+            label = int(file_name[0:2].strip('()'))
+            assert label == code_designation
+        except:
+            print(
+                '\n\nFAILURE OBTAINING TARGET LABEL FROM SAMPLE FILENAMES.\nThe sample filenames may not have been correctly labelled.'
+            )
+        # Append region and negative label to dataset.
+        data.append([region.reshape(1, *region.shape), label])
+
+    n_positive = len(data)
+
+    if verbose:
+        print('Loaded {} positive training samples'.format(n_positive))
+
+    # Return dataset for one code
+    return data
+
+def get_intensity(
+    img_folder='/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)',
+    region_detector_path='data/best/best_region_classifier.pt',
+):
+    region_detector = RegionDetector(model_load_path=region_detector_path)
+    folder_name = img_folder[img_folder.rfind('/') + 1 :]
+    holograms = []
+
+    for ref_name in os.listdir(img_folder):
+        if '.tiff' not in ref_name:
+            continue
+        if 'ref' in ref_name:
+            print('referencing: ', ref_name)
+            reference = cv2.imread('{}/{}'.format(img_folder, ref_name), cv2.IMREAD_ANYDEPTH)
+
+            for image_name in os.listdir(img_folder):
+                code = ref_name.replace('_ref.tiff', "")
+                if (
+                    code == image_name.replace('.tiff', "").split('_')[0]
+                    and '.tiff' in image_name
+                    and 'ref' not in image_name
+                ):
+                    hologram = cv2.imread(
+                        '{}/{}'.format(img_folder, image_name), cv2.IMREAD_ANYDEPTH
+                    )
+                    hologram = hologram.astype(np.float32)
+                    holograms.append((hologram, image_name.replace('.tiff', ""), reference))
+
+    intensities = []
+    file_names = []
+    # Find intensities
+    for hologram in holograms:
+        holo, name, reference = hologram
+        if not os.path.exists('data/hulls'):
+            os.makedirs('data/hulls')
+        save_img_name = 'data/hulls/{}_{}_regions.png'.format(folder_name, name)
+        print('processing', name)
+        intensity = region_detector.get_intensity(holo, reference, save_img_name=save_img_name)
+        intensities.append(intensity)
+        file_names += [folder_name + '/' + name, "", ""]
+
+    # write to a csv file
+    intensities = list(itertools.zip_longest(*intensities, fillvalue=["", "", ""]))
+    intensities = [list(itertools.chain(*x)) for x in intensities]
+
+    intensities = (
+        [file_names] + [['x', 'y', 'intensity'] * int(int(len(file_names)) / 3)] + intensities
+    )
+
+    if not os.path.exists('data/intensities'):
+        os.makedirs('data/intensities')
+    csv_path = 'data/intensities/' + folder_name + '.csv'
+    with open(csv_path, 'w') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.write_rows(intensities)
