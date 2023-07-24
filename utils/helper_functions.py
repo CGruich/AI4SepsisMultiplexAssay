@@ -10,6 +10,7 @@ import csv
 import itertools
 import re as regex
 
+
 def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=16):
     conv_window_size = conv_window_size
     convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (
@@ -161,6 +162,7 @@ def expand_bbox(bbox, desired_dims, image_boundary):
 
     return x1, y1, x2, y2, cx, cy
 
+
 def load_data(folder_path, verbose=True):
     positive_sample_folder = os.path.join(folder_path, 'positive')
     negative_sample_folder = os.path.join(folder_path, 'negative')
@@ -204,6 +206,7 @@ def load_data(folder_path, verbose=True):
     # Return dataset
     return data
 
+
 def sort_alphanumeric(string_list):
     assert hasattr(string_list, 'sort'), 'ERROR! TYPE {} DOES NOT HAVE A SORT FUNCTION'.format(
         type(string_list)
@@ -219,6 +222,7 @@ def sort_alphanumeric(string_list):
         return [int(c) if type(c) == int else c for c in regex.split('(-*[0-9]+)', x)]
 
     string_list.sort(key=sorting_key)
+
 
 def load_code(code_folder_path, verbose=True):
     code_sample_folder = os.path.join(code_folder_path, 'positive')
@@ -254,6 +258,7 @@ def load_code(code_folder_path, verbose=True):
 
     # Return dataset for one code
     return data
+
 
 def get_intensity(
     img_folder='/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)',

@@ -1,6 +1,4 @@
-from model_training import (
-    RegionClassifierTrainerGPU,
-)
+from model_training import RegionClassifierTrainerGPU
 from object_detection import RegionDetector
 from code_classification import CodeClassifier
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -12,6 +10,7 @@ import os
 from datetime import datetime
 
 from helper_functions import load_data
+
 
 def train_region_classifier(
     pipeline_inputs: dict = None,
@@ -103,6 +102,7 @@ def train_region_classifier(
         )
         trainer.load_data(load_data_path, dataset, train_idx=None, val_idx=None)
         trainer.train(cross_validate=False, cross_val_scores=None)
+
 
 def grid_search_region_classifier(
     pipeline_inputs: dict = None,
@@ -311,6 +311,7 @@ def grid_search_region_classifier(
                     print(row)
                     print(scores)
                     print('\n')
+
 
 def test_system(
     img_folder='/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)',

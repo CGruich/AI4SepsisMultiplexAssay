@@ -132,7 +132,9 @@ def train_region_classifier(
     # Extract all the targets of the training samples
     targets = np.array(list(zip(*data_list))[-1])
     # All the samples
-    dataset = np.asarray(helper_functions.load_data(load_data_path, verbose=verbose), dtype=object)
+    dataset = np.asarray(
+        helper_functions.load_data(load_data_path, verbose=verbose), dtype=object
+    )
 
     # Do a stratified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
@@ -301,16 +303,14 @@ def classify_regions(pipeline_inputs: dict = None):
                         cv2.imwrite(file_path, region)
                     sum_neg = sum_neg + len(negative_regions)
 
+
 def train_code_classifier(
-    pipeline_inputs: dict = None, 
-    timestamp: str = None, 
-    hyper_dict: dict = None
+    pipeline_inputs: dict = None, timestamp: str = None, hyper_dict: dict = None
 ):
     assert pipeline_inputs is not None
-    
+
     if timestamp is None:
         timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
-
 
     # Timestamps for record-keeping
     if pipeline_inputs['timestamp'] is None:
@@ -322,20 +322,14 @@ def train_code_classifier(
     )
     code_data_composite = []
     for code in codes:
-        code_path = os.path.join(
-            pipeline_inputs['sample_parent_directory'], 'code ' + code
-        )
+        code_path = os.path.join(pipeline_inputs['sample_parent_directory'], 'code ' + code)
         code_data = helper_functions.load_code(code_folder_path=code_path)
         code_data_composite = code_data_composite + code_data
 
     # Total composite dataset samples
     # Only print verbosely if we are not hyperparameter optimizing
     if hyper_dict is None:
-        print(
-            'Total Composite Dataset Training Samples:\n{}'.format(
-                len(code_data_composite)
-            )
-        )
+        print('Total Composite Dataset Training Samples:\n{}'.format(len(code_data_composite)))
 
     # Based on the format of the return result of helper_functions.load_code(),
     # Extract all the targets of the training samples
