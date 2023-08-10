@@ -17,7 +17,8 @@ class CodeClassifier(nn.Module):
         super().__init__()
 
         # CG: CPU or GPU, prioritizes GPU if available.
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(
+            'cuda:0' if torch.cuda.is_available() else 'cpu')
 
         ch1 = 64
         ch2 = 32
@@ -25,17 +26,20 @@ class CodeClassifier(nn.Module):
         h1 = fc_size
         self.conv_layers = [
             nn.BatchNorm2d(1),
-            nn.Conv2d(in_channels=1, out_channels=ch1, kernel_size=(6, 6), stride=(3, 3)),
+            nn.Conv2d(in_channels=1, out_channels=ch1,
+                      kernel_size=(6, 6), stride=(3, 3)),
             nn.PReLU(),
             nn.Dropout(p=dropout_rate),
             nn.MaxPool2d(kernel_size=(2, 2)),
             nn.BatchNorm2d(ch1),
-            nn.Conv2d(in_channels=ch1, out_channels=ch2, kernel_size=(4, 4), stride=(2, 2)),
+            nn.Conv2d(in_channels=ch1, out_channels=ch2,
+                      kernel_size=(4, 4), stride=(2, 2)),
             nn.PReLU(),
             nn.Dropout(p=dropout_rate),
             nn.MaxPool2d(kernel_size=(2, 2)),
             nn.BatchNorm2d(ch2),
-            nn.Conv2d(in_channels=ch2, out_channels=ch3, kernel_size=(3, 3), stride=(1, 1)),
+            nn.Conv2d(in_channels=ch2, out_channels=ch3,
+                      kernel_size=(3, 3), stride=(1, 1)),
             nn.PReLU(),
             nn.Dropout(p=dropout_rate),
         ]
