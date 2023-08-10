@@ -11,8 +11,8 @@ class CodeClassifier(nn.Module):
         region_shape=(1, 128, 128),
         fc_size: int = 256,
         fc_num: int = 2,
-        dropoutRate: float = 0.1,
-        model_load_path=None,
+        dropout_rate: float = 0.1,
+        model_load_path: str = None,
     ):
         super().__init__()
 
@@ -27,17 +27,17 @@ class CodeClassifier(nn.Module):
             nn.BatchNorm2d(1),
             nn.Conv2d(in_channels=1, out_channels=ch1, kernel_size=(6, 6), stride=(3, 3)),
             nn.PReLU(),
-            nn.Dropout(p=dropoutRate),
+            nn.Dropout(p=dropout_rate),
             nn.MaxPool2d(kernel_size=(2, 2)),
             nn.BatchNorm2d(ch1),
             nn.Conv2d(in_channels=ch1, out_channels=ch2, kernel_size=(4, 4), stride=(2, 2)),
             nn.PReLU(),
-            nn.Dropout(p=dropoutRate),
+            nn.Dropout(p=dropout_rate),
             nn.MaxPool2d(kernel_size=(2, 2)),
             nn.BatchNorm2d(ch2),
             nn.Conv2d(in_channels=ch2, out_channels=ch3, kernel_size=(3, 3), stride=(1, 1)),
             nn.PReLU(),
-            nn.Dropout(p=dropoutRate),
+            nn.Dropout(p=dropout_rate),
         ]
 
         # Convolutional layers reduce the size of their input by some amount. Because of this, we need to find out how
@@ -50,10 +50,10 @@ class CodeClassifier(nn.Module):
         # print("FINAL VECTOR LENGTH:",detected_conv_features)
         self.ff_layers = [
             nn.Flatten(),
-            nn.Dropout(p=dropoutRate),
             nn.BatchNorm1d(detected_conv_features),
             nn.Linear(detected_conv_features, h1),
             nn.PReLU(),
+            nn.Dropout(p=dropout_rate),
         ]
 
         self.fc_layers = []
@@ -63,27 +63,45 @@ class CodeClassifier(nn.Module):
         if fc_num > 1:
             # For each layer, not counting the very last layer
             for _ in range(fc_num - 1):
-                # Append dropout layer to prevent overfitting
-                self.fc_layers.append(nn.Dropout(p=dropoutRate))
                 # Append batch normalization
                 self.fc_layers.append(nn.BatchNorm1d(h1))
                 # Append a linear layer
                 self.fc_layers.append(nn.Linear(h1, h1))
                 # Append PRELU() activation function
                 self.fc_layers.append(nn.PReLU())
+                # Append dropout layer to prevent overfitting
+                self.fc_layers.append(nn.Dropout(p=dropout_rate))
             # Add the final layer that outputs the code label predictions
-            self.fc_layers.append(nn.Dropout(p=dropoutRate))
             self.fc_layers.append(nn.BatchNorm1d(h1))
             self.fc_layers.append(nn.Linear(h1, n_codes))
+            # Dropout layer to prevent overfitting
+            self.fc_layers.append(nn.Dropout(p=dropout_rate))
+            # Because we use cross-entropy loss to train the model,
+            # log(softmax(x)) is applied internally within the loss function.
+            # So, we cannot apply softmax redundantly here.
+            # Because this is a multi-class classification problem where we want to select the class with the highest probability,
+            # it behooves us to use an activation function that can segregate values into a high-value regime and a low-value regime,
+            # such as Softplus()
+            # If we wanted the true class probabilities, we can apply softmax() after-the-fact during inference.
+            self.fc_layers.append(nn.Softplus())
+
             # Not compatible with cross-entropy loss function, as cross-entropy loss applies softmax internally
             # For now, this is commented out. In production outside of model training, this can be uncommented and used.
             # nn.Softmax(dim=-1)
         # Else if only one fully connected layer to add
         else:
-            # Dropout layer to prevent overfitting
-            self.fc_layers.append(nn.Dropout(p=dropoutRate))
             self.fc_layers.append(nn.BatchNorm1d(h1))
             self.fc_layers.append(nn.Linear(h1, n_codes))
+            # Dropout layer to prevent overfitting
+            self.fc_layers.append(nn.Dropout(p=dropout_rate))
+            # Because we use cross-entropy loss to train the model,
+            # log(softmax(x)) is applied internally within the loss function.
+            # So, we cannot apply softmax redundantly here.
+            # Because this is a multi-class classification problem where we want to select the class with the highest probability,
+            # it behooves us to use an activation function that can segregate values into a high-value regime and a low-value regime,
+            # such as Softplus()
+            # If we wanted the true class probabilities, we can apply softmax() after-the-fact during inference.
+            self.fc_layers.append(nn.Softplus())
 
         # Combine all the layers
         layers = self.conv_layers + self.ff_layers + self.fc_layers

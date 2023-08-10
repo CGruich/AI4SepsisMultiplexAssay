@@ -12,7 +12,6 @@ from datetime import datetime
 
 # Prints augmented images out for debugging
 
-
 def print_images(
     sample_batch_tensor,
     path: str = None,
@@ -49,11 +48,11 @@ class CodeClassifierTrainerGPU(object):
         # Prints out augmented images if set to true
         self.debug = False
 
+        # Printing verbosity
+        self.verbose = verbose
+
         # CG: CPU or GPU, prioritizes GPU if available.
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-        self.verbose = verbose
-        self.test_data = None
         # Print availability to GPU
         if self.verbose:
             print('CUDA Availability: ' + str(torch.cuda.is_available()))
@@ -61,7 +60,10 @@ class CodeClassifierTrainerGPU(object):
         # Number of codes for the multi-class model
         n_codes = len(codes)
         self.model = CodeClassifier(
-            n_codes, fc_size=fc_size, fc_num=fc_num, dropout_rate=dropout_rate
+            n_codes, 
+            fc_size=fc_size, 
+            fc_num=fc_num, 
+            dropout_rate=dropout_rate
         )
 
         # Print the model architecture as a sanity check
@@ -78,6 +80,7 @@ class CodeClassifierTrainerGPU(object):
 
         self.train_data = None
         self.val_data = None
+        self.test_data = None
 
         self.num_codes = n_codes
 
@@ -203,6 +206,10 @@ class CodeClassifierTrainerGPU(object):
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
                 predicted_labels = (
+                    # Argmax gets the position of the class,
+                    # For example, class 1 is at position 0.
+                    # To convert this position 0 into the corresponding class, increment by 1.
+                    # e.g., position vector [0 4 2] becomes a class label vector [1 5 3]
                     ((torch.argmax(predictions, dim=1) + 1).float())
                     .clone()
                     .detach()
@@ -213,7 +220,9 @@ class CodeClassifierTrainerGPU(object):
                 # Our barcodes are labelled from 1 ... N
                 # But the cross-entropy loss function accepts class labels from 0 ... N-1
                 # Here, we just decrement by 1 to match this convention
-                loss = loss_fn((predicted_labels - 1), (labels - 1))
+                # CrossEntropyLoss() accepts unnormalized prediction logits
+                # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
+                loss = loss_fn(predictions, (labels - 1))
 
                 loss.backward()
                 optimizer.step()
@@ -258,10 +267,6 @@ class CodeClassifierTrainerGPU(object):
             self.losses['vl'].append(val_loss)
             self.losses['test_loss'].append(test_loss)
             self.losses['epoch'].append(epoch)
-
-            # CG: Legacy Code
-            # print("EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
-            #    epoch, train_loss, train_acc, val_loss, val_acc))
 
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:
@@ -441,7 +446,9 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         predicted_labels = (torch.argmax(predictions, dim=1) + 1).float()
-        loss = self.loss_fn(predicted_labels - 1, labels - 1).item()
+        # CrossEntropyLoss() accepts unnormalized prediction logits
+        # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
+        loss = self.loss_fn(predictions, labels - 1).item()
         acc = self.compute_accuracy(labels, predicted_labels)
 
         # Set the model back to training mode.
@@ -472,7 +479,9 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         predicted_labels = (torch.argmax(predictions, dim=1) + 1).float()
-        loss = self.loss_fn(predicted_labels - 1, labels - 1).item()
+        # CrossEntropyLoss() accepts unnormalized prediction logits
+        # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
+        loss = self.loss_fn(predictions, labels - 1).item()
         acc = self.compute_accuracy(labels, predicted_labels)
 
         # Set the model back to training mode.
@@ -489,12 +498,12 @@ class CodeClassifierTrainerGPU(object):
         :param predicted_labels: Predicted labels from the model.
         :return: Computed accuracy.
         """
-
+        
         predicted_labels = predicted_labels.argmax(dim=-1) + 1
-        # print("predicted_labels")
-        # print(predicted_labels)
-        # print("labels")
-        # print(labels)
+        print("predicted_labels")
+        print(predicted_labels)
+        print("labels")
+        print(labels)
 
         n_samples = labels.shape[0]
 
