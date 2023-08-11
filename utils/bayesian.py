@@ -22,7 +22,8 @@ def objective_code_classifier(trial, pipeline_inputs: dict = None):
     dr = trial.suggest_float('dropout_rate', 0.0, 0.8)
 
     # Dictionary of hyperparameters
-    hyper_dict = {'lr': lr, 'bs': bs, 'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr}
+    hyper_dict = {'lr': lr, 'bs': bs,
+                  'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr}
 
     # Run stratified k-fold cross-validation with the hyperparameters
     # Via the pipeline functionality of the workflow,
@@ -50,7 +51,8 @@ def objective_region_classifier(trial, pipeline_inputs: dict = None):
     dr = trial.suggest_float('dropout_rate', 0.0, 0.8)
 
     # Dictionary of hyperparameters
-    hyper_dict = {'lr': lr, 'bs': bs, 'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr}
+    hyper_dict = {'lr': lr, 'bs': bs,
+                  'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr}
 
     # Run stratified k-fold cross-validation with the hyperparameters
     # Via the pipeline functionality of the workflow,
