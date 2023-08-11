@@ -58,7 +58,9 @@ class RegionClassifierTrainerGPU(object):
             print('CUDA Availability: ' + str(torch.cuda.is_available()))
 
         self.model = RegionClassifier(
-            fc_size=fc_size, fc_num=fc_num, dropout_rate=dropout_rate,
+            fc_size=fc_size, 
+            fc_num=fc_num, 
+            dropout_rate=dropout_rate,
         )
 
         # Print the model architecture as a sanity check
@@ -202,11 +204,12 @@ class RegionClassifierTrainerGPU(object):
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
 
-                loss = loss_fn(predictions, labels)
+                loss = loss_fn(predictions.to(torch.float64), labels.to(torch.int64))
+
                 loss.backward()
                 optimizer.step()
 
-                train_acc += self.compute_accuracy(labels, predictions)
+                train_acc += self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
                 train_loss += loss.detach().item()
 
             # Report training loss, training accuracy, validation loss, validation accuracy, and test loss/accuracy.
