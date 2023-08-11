@@ -422,7 +422,7 @@ class RegionClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         loss = self.loss_fn(predictions, labels).item()
-        acc = self.compute_accuracy(labels, predictions)
+        acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
 
         # Set the model back to training mode.
         self.model.train()
@@ -452,7 +452,7 @@ class RegionClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         loss = self.loss_fn(predictions, labels).item()
-        acc = self.compute_accuracy(labels, predictions)
+        acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
 
         # Set the model back to training mode.
         self.model.train()

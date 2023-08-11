@@ -452,7 +452,7 @@ class CodeClassifierTrainerGPU(object):
         # CrossEntropyLoss() accepts unnormalized prediction logits
         # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
         loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
-        acc = self.compute_accuracy(labels, predictions)
+        acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
         print("Val Acc:")
         print(acc)
 
@@ -486,7 +486,7 @@ class CodeClassifierTrainerGPU(object):
         # CrossEntropyLoss() accepts unnormalized prediction logits
         # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
         loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
-        acc = self.compute_accuracy(labels, predictions)
+        acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
         print("Test Acc:")
         print(acc)
 
