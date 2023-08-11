@@ -507,6 +507,9 @@ class CodeClassifierTrainerGPU(object):
         :param predicted_labels: Predicted labels from the model.
         :return: Computed accuracy.
         """
+
+        labels = labels.to(torch.int64)
+
         print('logits compute_accuracy()')
         print(logits)
         print('softmax logits compute_accuracy')
