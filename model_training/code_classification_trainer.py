@@ -11,7 +11,8 @@ from torchvision import transforms
 class CodeClassifierTrainer(object):
     def __init__(
         self,
-        codes=['1-1', '1-2', '1-3', '1-4', '1-5', '1-6', '1-7', '1-8', '1-9', '1-10'],
+        codes=['1-1', '1-2', '1-3', '1-4', '1-5',
+               '1-6', '1-7', '1-8', '1-9', '1-10'],
         model_save_path='data/models/code_classifier',
         save_every_n=10,
         batch_size=256,
@@ -39,7 +40,8 @@ class CodeClassifierTrainer(object):
         self.losses = {'epoch': [], 'ta': [], 'va': [], 'tl': [], 'vl': []}
         self.patience = 5
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(
+            self.model.parameters(), lr=self.learning_rate)
         self.loss_fn = nn.BCELoss()
 
     def train(self):
@@ -133,7 +135,7 @@ class CodeClassifierTrainer(object):
         bs = self.batch_size
         for i in range(len(data) // bs):
             # Choose our random batch.
-            idxs = indices[i * bs : i * bs + bs]
+            idxs = indices[i * bs: i * bs + bs]
             batch = data[idxs]
 
             samples = []
@@ -151,7 +153,8 @@ class CodeClassifierTrainer(object):
             # Cast batch to tensor for PyTorch.
             samples = torch.as_tensor(samples, dtype=torch.float32)
             if np.random.uniform(0, 1) < transform_prob:
-                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
+                tf = transforms.RandomRotation(
+                    degrees=np.random.randint(0, 365))
                 samples = tf(samples)
 
             if np.random.uniform(0, 1) < transform_prob:
@@ -250,7 +253,8 @@ class CodeClassifierTrainer(object):
                 code = file_name[: file_name.find('(')].strip()
             # Load region.
             region = cv2.imread(
-                os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+                os.path.join(positive_sample_folder,
+                             file_name), cv2.IMREAD_ANYDEPTH
             )
             label = self.one_hot(self.code_map[code])
             label_counts[code] += 1
