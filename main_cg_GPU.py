@@ -39,12 +39,10 @@ if __name__ == '__main__':
     # ------------------------------------------------------------------
 
     if action == 'bayesian_optimize_code_classifier':
-        action_functions.bayesian_optimize_code_classifer(
-            pipeline_inputs=pipeline_inputs)
+        action_functions.bayesian_optimize_code_classifer(pipeline_inputs=pipeline_inputs)
 
     elif action == 'bayesian_optimize_region_classifier':
-        action_functions.bayesian_optimize_region_classifer(
-            pipeline_inputs=pipeline_inputs)
+        action_functions.bayesian_optimize_region_classifer(pipeline_inputs=pipeline_inputs)
 
     elif action == 'classify_regions':
         action_functions.classify_regions(pipeline_inputs=pipeline_inputs)
@@ -53,8 +51,7 @@ if __name__ == '__main__':
         action_functions.find_mser_params(pipeline_inputs=pipeline_inputs)
 
     elif action == 'train_region_classifier':
-        action_functions.train_region_classifier(
-            pipeline_inputs=pipeline_inputs)
+        action_functions.train_region_classifier(pipeline_inputs=pipeline_inputs)
 
     elif action == 'train_code_classifier':
         action_functions.train_code_classifier(pipeline_inputs=pipeline_inputs)

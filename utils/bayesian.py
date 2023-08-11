@@ -9,9 +9,7 @@ from . import action_functions
 # Objective function for Bayesian optimization with OpTuna
 
 
-def objective_code_classifier(trial,
-                              pipeline_inputs: dict = None
-                              ):
+def objective_code_classifier(trial, pipeline_inputs: dict = None):
     # Learning rate
     lr = trial.suggest_float('learning_rate', 1e-8, 1e-2)
     # Batch size
@@ -24,8 +22,7 @@ def objective_code_classifier(trial,
     dr = trial.suggest_float('dropout_rate', 0.0, 0.8)
 
     # Dictionary of hyperparameters
-    hyper_dict = {'lr': lr, 'bs': bs,
-                  'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr}
+    hyper_dict = {'lr': lr, 'bs': bs, 'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr}
 
     # Run stratified k-fold cross-validation with the hyperparameters
     # Via the pipeline functionality of the workflow,
@@ -40,9 +37,7 @@ def objective_code_classifier(trial,
     return avg_val_accuracy
 
 
-def objective_region_classifier(trial,
-                                pipeline_inputs: dict = None
-                                ):
+def objective_region_classifier(trial, pipeline_inputs: dict = None):
     # Learning rate
     lr = trial.suggest_float('learning_rate', 1e-8, 1e-2)
     # Batch size
@@ -55,8 +50,7 @@ def objective_region_classifier(trial,
     dr = trial.suggest_float('dropout_rate', 0.0, 0.8)
 
     # Dictionary of hyperparameters
-    hyper_dict = {'lr': lr, 'bs': bs,
-                  'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr}
+    hyper_dict = {'lr': lr, 'bs': bs, 'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr}
 
     # Run stratified k-fold cross-validation with the hyperparameters
     # Via the pipeline functionality of the workflow,
@@ -69,6 +63,7 @@ def objective_region_classifier(trial,
 
     # Return this accuracy, which we rely on for the Bayesian loop
     return avg_val_accuracy
+
 
 # Define a function that we can use to restart the optimization from the last trial.
 # This is useful if we try a high-throughput amount of trials and don't want to start over after a crash, for example
