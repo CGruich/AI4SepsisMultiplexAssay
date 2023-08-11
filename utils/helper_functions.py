@@ -4,6 +4,7 @@ import torch
 from scipy.signal import convolve2d
 from pathlib import Path
 import json
+
 # from object_detection import RegionDetector
 import cv2
 import numpy as np
@@ -13,7 +14,14 @@ import itertools
 import re as regex
 
 
-def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=16, scale_to_bit_depth=True, ref_already_convolved=False):
+def normalize_by_reference(
+    hologram,
+    reference,
+    conv_window_size=10,
+    bit_depth=16,
+    scale_to_bit_depth=True,
+    ref_already_convolved=False,
+):
     conv_window_size = conv_window_size
     convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (
         conv_window_size * conv_window_size
@@ -28,8 +36,7 @@ def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=1
     # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
     # image to use for normalization.
     if not ref_already_convolved:
-        averaged_reference_image = convolve2d(
-            reference_image, convolution_kernel, mode='same')
+        averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
     else:
         averaged_reference_image = reference_image
 
@@ -120,8 +127,7 @@ def non_max_suppression_fast(boxes, maximum_acceptable_overlap, return_picks=Fal
 
         # delete all indexes from the index list that exceed the maximum overlap threshold
         idxs = np.delete(
-            idxs, np.concatenate(
-                ([last], np.where(overlap > maximum_acceptable_overlap)[0])),
+            idxs, np.concatenate(([last], np.where(overlap > maximum_acceptable_overlap)[0])),
         )
 
     if return_picks:
@@ -185,8 +191,7 @@ def load_data(folder_path, verbose=True):
 
         # Load region.
         region = cv2.imread(
-            os.path.join(positive_sample_folder,
-                         file_name), cv2.IMREAD_ANYDEPTH
+            os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
         )
         label = 1
 
@@ -205,8 +210,7 @@ def load_data(folder_path, verbose=True):
 
         # Load region.
         region = cv2.imread(
-            os.path.join(negative_sample_folder,
-                         file_name), cv2.IMREAD_ANYDEPTH
+            os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
         )
         label = 0
         # Append region and negative label to dataset.
@@ -252,8 +256,7 @@ def load_code(code_folder_path, verbose=True):
             continue
 
         # Load region.
-        region = cv2.imread(os.path.join(
-            code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+        region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
         try:
             label = int(file_name[0:2].strip('()'))
             assert label == code_designation
@@ -280,12 +283,12 @@ def find_intensity(normalized_hologram, particle_locations):
 
     intensities = []
 
-    for coord in particle_locations["particle_locations"]:
+    for coord in particle_locations['particle_locations']:
         x, y = coord
-        left = max(x-window_x, 0)
-        right = min(x+window_x, w)
-        top = max(y-window_y, 0)
-        bottom = min(y+window_y, h)
+        left = max(x - window_x, 0)
+        right = min(x + window_x, w)
+        top = max(y - window_y, 0)
+        bottom = min(y + window_y, h)
         region = normalized_hologram[top:bottom, left:right]
         region_intensity = region.mean()
         intensities.append(region_intensity)
@@ -298,8 +301,7 @@ def load_and_normalize(raw_directory, code_list, color=False, one_ref_per_img=Tr
         # If we are processing colored images of the barcoded particles,
         if color:
             # The directory of all the raw images for a particular code color (e.g., (1))
-            code_raw_directory = os.path.join(
-                raw_directory, 'code ' + code + ' color')
+            code_raw_directory = os.path.join(raw_directory, 'code ' + code + ' color')
             print(f'Examining Code {code}\n{code_raw_directory}')
 
         # Or if we are processing greyscale images of the barcoded particles,
@@ -345,34 +347,30 @@ def load_and_normalize(raw_directory, code_list, color=False, one_ref_per_img=Tr
         particle_locations = []
 
         if not one_ref_per_img:
-            reference_img_path = os.path.join(code_raw_directory, "ref.tiff")
-            references.append(cv2.imread(
-                reference_img_path, cv2.IMREAD_ANYDEPTH))
+            reference_img_path = os.path.join(code_raw_directory, 'ref.tiff')
+            references.append(cv2.imread(reference_img_path, cv2.IMREAD_ANYDEPTH))
 
         for i in range(len(raw_img_names)):
             raw_img_path = os.path.join(code_raw_directory, raw_img_names[i])
-            reference_img_path = os.path.join(
-                code_raw_directory, reference_img_names[i])
+            reference_img_path = os.path.join(code_raw_directory, reference_img_names[i])
             particle_location_path = os.path.join(
-                code_raw_directory, particle_location_names[i])
+                code_raw_directory, particle_location_names[i]
+            )
 
             print(f'Raw Image Path: {raw_img_path}')
             print(f'Reference Image Path: {reference_img_path}')
             print(f'Particle Locations Path: {particle_location_path}\n')
 
-            assert Path(raw_img_path).is_file() and Path(
-                reference_img_path).is_file()
+            assert Path(raw_img_path).is_file() and Path(reference_img_path).is_file()
 
             holograms.append(cv2.imread(raw_img_path, cv2.IMREAD_ANYDEPTH))
             if one_ref_per_img:
-                references.append(cv2.imread(
-                    reference_img_path, cv2.IMREAD_ANYDEPTH))
+                references.append(cv2.imread(reference_img_path, cv2.IMREAD_ANYDEPTH))
 
             with open(particle_location_path, 'r') as particle_file:
                 particle_locations_json = dict(json.load(particle_file))
 
-            particle_locations_list = list(
-                particle_locations_json['particle_locations'])
+            particle_locations_list = list(particle_locations_json['particle_locations'])
             particle_locations.append(particle_locations_list)
 
         for i in range(len(holograms)):
@@ -382,8 +380,7 @@ def load_and_normalize(raw_directory, code_list, color=False, one_ref_per_img=Tr
             else:
                 reference_image = references[0]
 
-            grayscale_hologram = normalize_by_reference(
-                hologram_image, reference_image)
+            grayscale_hologram = normalize_by_reference(hologram_image, reference_image)
             grayscales.append(grayscale_hologram)
 
         return grayscales, particle_locations

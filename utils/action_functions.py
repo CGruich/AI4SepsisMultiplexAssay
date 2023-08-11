@@ -88,8 +88,7 @@ def find_mser_params(pipeline_inputs: dict):
         # If we are processing colored images of the barcoded particles,
         if pipeline_inputs['color']:
             # The directory of all the raw images for a particular code color (e.g., (1))
-            code_raw_directory = os.path.join(
-                raw_directory, 'code ' + code + ' color')
+            code_raw_directory = os.path.join(raw_directory, 'code ' + code + ' color')
             print(f'Examining Code {code}\n{code_raw_directory}')
         # Or if we are processing greyscale images of the barcoded particles,
         else:
@@ -136,8 +135,7 @@ def find_mser_params(pipeline_inputs: dict):
         particle_locations = []
         for i in range(len(raw_img_names)):
             raw_img_path = os.path.join(code_raw_directory, raw_img_names[i])
-            reference_img_path = os.path.join(
-                code_raw_directory, reference_img_names[i])
+            reference_img_path = os.path.join(code_raw_directory, reference_img_names[i])
             particle_location_path = os.path.join(
                 code_raw_directory, particle_location_names[i]
             )
@@ -146,17 +144,14 @@ def find_mser_params(pipeline_inputs: dict):
             print(f'Reference Image Path: {reference_img_path}')
             print(f'Particle Locations Path: {particle_location_path}\n')
 
-            assert Path(raw_img_path).is_file() and Path(
-                reference_img_path).is_file()
+            assert Path(raw_img_path).is_file() and Path(reference_img_path).is_file()
 
             holograms.append(cv2.imread(raw_img_path, cv2.IMREAD_ANYDEPTH))
-            references.append(cv2.imread(
-                reference_img_path, cv2.IMREAD_ANYDEPTH))
+            references.append(cv2.imread(reference_img_path, cv2.IMREAD_ANYDEPTH))
 
             with open(particle_location_path, 'r') as particle_file:
                 particle_locations_json = dict(json.load(particle_file))
-            particle_locations_list = list(
-                particle_locations_json['particle_locations'])
+            particle_locations_list = list(particle_locations_json['particle_locations'])
             particle_locations.append(particle_locations_list)
 
         for hologram_image, reference_image in zip(holograms, references):
@@ -171,8 +166,7 @@ def find_mser_params(pipeline_inputs: dict):
             num_iterations=pipeline_inputs['number_iterations'],
         )
 
-        save_directory = os.path.join(
-            code_raw_directory, 'MSER_Parameters.json')
+        save_directory = os.path.join(code_raw_directory, 'MSER_Parameters.json')
         opt.train(save_directory=save_directory)
         print(f'\nMSER Parameters Saved To:\n{save_directory}\n')
 
@@ -216,8 +210,7 @@ def train_region_classifier(
     # CG: Stratified k-Fold cross-validation
     if cross_validate:
         # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
-        splits = StratifiedKFold(
-            n_splits=k, shuffle=True, random_state=random_state)
+        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state)
 
         training_data_idx = np.arange(len(training_data))
         cross_val_scores = {
@@ -268,8 +261,7 @@ def train_region_classifier(
         trainer = RegionClassifierTrainerGPU(
             model_save_path=model_save_path, hpo_trial=hpo_trial, verbose=verbose, log=log,
         )
-        trainer.load_data(load_data_path, dataset,
-                          train_idx=None, val_idx=None)
+        trainer.load_data(load_data_path, dataset, train_idx=None, val_idx=None)
         trainer.train(cross_validate=False, cross_val_scores=None)
 
 
@@ -339,8 +331,7 @@ def classify_regions(pipeline_inputs: dict = None):
                     ):
                         # Read the raw code image
                         hologram = cv2.imread(
-                            '{}/{}'.format(raw_code_dir,
-                                           image_name), cv2.IMREAD_ANYDEPTH,
+                            '{}/{}'.format(raw_code_dir, image_name), cv2.IMREAD_ANYDEPTH,
                         )
                         hologram = hologram.astype(np.float32)
                         # Append the raw image data with the reference image data.
@@ -350,8 +341,7 @@ def classify_regions(pipeline_inputs: dict = None):
 
                 for hologram in holograms:
                     holo, name, reference = hologram
-                    save_img_name = 'data/test/{}_{}_regions.png'.format(
-                        code_num, name)
+                    save_img_name = 'data/test/{}_{}_regions.png'.format(code_num, name)
                     (positive_regions, negative_regions,) = region_detector.detect_regions(
                         holo, reference, save_img_name=save_img_name
                     )
@@ -388,8 +378,7 @@ def train_code_classifier(
 
     # Timestamps for record-keeping
     if pipeline_inputs['timestamp'] is None:
-        pipeline_inputs['timestamp'] = datetime.now().strftime(
-            '%m_%d_%y_%H:%M')
+        pipeline_inputs['timestamp'] = datetime.now().strftime('%m_%d_%y_%H:%M')
 
     codes = pipeline_inputs['code_list']
     trainer = CodeClassifierTrainerGPU(
@@ -397,16 +386,14 @@ def train_code_classifier(
     )
     code_data_composite = []
     for code in codes:
-        code_path = os.path.join(
-            pipeline_inputs['sample_parent_directory'], 'code ' + code)
+        code_path = os.path.join(pipeline_inputs['sample_parent_directory'], 'code ' + code)
         code_data = helper_functions.load_code(code_folder_path=code_path)
         code_data_composite = code_data_composite + code_data
 
     # Total composite dataset samples
     # Only print verbosely if we are not hyperparameter optimizing
     if hyper_dict is None:
-        print('Total Composite Dataset Training Samples:\n{}'.format(
-            len(code_data_composite)))
+        print('Total Composite Dataset Training Samples:\n{}'.format(len(code_data_composite)))
 
     # Based on the format of the return result of helper_functions.load_code(),
     # Extract all the targets of the training samples
@@ -531,11 +518,9 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
                     callbacks=[pruning_callback])"""
 
     # Get the pruned trials (trials pruned prematurely)
-    pruned_trials = study.get_trials(
-        deepcopy=False, states=[TrialState.PRUNED])
+    pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
     # Get the completed trials
-    complete_trials = study.get_trials(
-        deepcopy=False, states=[TrialState.COMPLETE])
+    complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
     # Summarize
     print('\n\nStudy statistics: ')
@@ -581,11 +566,9 @@ def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
                     callbacks=[pruning_callback])"""
 
     # Get the pruned trials (trials pruned prematurely)
-    pruned_trials = study.get_trials(
-        deepcopy=False, states=[TrialState.PRUNED])
+    pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
     # Get the completed trials
-    complete_trials = study.get_trials(
-        deepcopy=False, states=[TrialState.COMPLETE])
+    complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
     # Summarize
     print('\n\nStudy statistics: ')
@@ -605,69 +588,75 @@ def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
 
 def find_particle_intensities():
     from scipy.signal import convolve2d
-    conv_window_size = 10
-    convolution_kernel = np.ones(
-        (conv_window_size, conv_window_size)) / (conv_window_size * conv_window_size)
 
-    dropbox_path = "E:/Dropbox/Dropbox (Partners HealthCare)/DL_training/data/raw/Protein assay"
-    code_paths = ["code 1_IL-1/230529_IL-1 [Dz 9~9.5]",
-                  "code 2_IL-3/230520_IL-3 [Dz 9~9.5]",
-                  "code 3_IL-6/230601_IL-6 [Dz 9~9.5]",
-                  "code 4_IL-10/230606_IL-10 [Dz 9.5]",
-                  "code 5_TNF-a/230615_TNF-a [Dz 9.5]",
-                  "code 6_ANG-2/230425_ANG-2 [Dz 10]"]
+    conv_window_size = 10
+    convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (
+        conv_window_size * conv_window_size
+    )
+
+    dropbox_path = (
+        'E:/Dropbox/Dropbox (Partners HealthCare)/DL_training/data/raw/Protein assay'
+    )
+    code_paths = [
+        'code 1_IL-1/230529_IL-1 [Dz 9~9.5]',
+        'code 2_IL-3/230520_IL-3 [Dz 9~9.5]',
+        'code 3_IL-6/230601_IL-6 [Dz 9~9.5]',
+        'code 4_IL-10/230606_IL-10 [Dz 9.5]',
+        'code 5_TNF-a/230615_TNF-a [Dz 9.5]',
+        'code 6_ANG-2/230425_ANG-2 [Dz 10]',
+    ]
     # code_paths = ["code 1_IL-1/230529_IL-1 [Dz 9~9.5]"]
 
     code_data = {}
     for code_path in code_paths:
         full_path = os.path.join(dropbox_path, code_path)
 
-        ref = cv2.imread(os.path.join(full_path, "ref.tiff"),
-                         cv2.IMREAD_ANYDEPTH).astype(np.float32)
+        ref = cv2.imread(os.path.join(full_path, 'ref.tiff'), cv2.IMREAD_ANYDEPTH).astype(
+            np.float32
+        )
         ref = convolve2d(ref, convolution_kernel, mode='same')
 
-        code = code_path[:code_path.find("_")]
+        code = code_path[: code_path.find('_')]
         code_data[code] = {}
         for file_name in os.listdir(full_path):
-            if "trol" in file_name or "ref" in file_name:
+            if 'trol' in file_name or 'ref' in file_name:
                 continue
 
-            print("Loading", file_name)
+            print('Loading', file_name)
 
-            if ".json" in file_name:
-                file_name_key = file_name[:file_name.rfind(
-                    "_particle_locations")]
+            if '.json' in file_name:
+                file_name_key = file_name[: file_name.rfind('_particle_locations')]
                 if file_name_key not in code_data[code].keys():
                     code_data[code][file_name_key] = {}
 
                 file = open(os.path.join(full_path, file_name), 'r')
-                code_data[code][file_name_key]["particle_locations"] = dict(
-                    json.load(file))
+                code_data[code][file_name_key]['particle_locations'] = dict(json.load(file))
             else:
-                file_name_key = file_name[:file_name.rfind(".tiff")]
+                file_name_key = file_name[: file_name.rfind('.tiff')]
                 if file_name_key not in code_data[code].keys():
                     code_data[code][file_name_key] = {}
 
-                intensity_str = file_name[:file_name.find("_")]
-                stripped = intensity_str.replace(".tif", "")
-                stripped = stripped.replace(".tiff", "")
+                intensity_str = file_name[: file_name.find('_')]
+                stripped = intensity_str.replace('.tif', "")
+                stripped = stripped.replace('.tiff', "")
                 known_intensity = int(stripped)
-                hologram = cv2.imread(os.path.join(
-                    full_path, file_name), cv2.IMREAD_ANYDEPTH)
+                hologram = cv2.imread(os.path.join(full_path, file_name), cv2.IMREAD_ANYDEPTH)
                 grayscale = helper_functions.normalize_by_reference(
-                    hologram, ref, scale_to_bit_depth=False, ref_already_convolved=True)
-                code_data[code][file_name_key]["normalized_hologram"] = grayscale
-                code_data[code][file_name_key]["known_intensity"] = known_intensity
+                    hologram, ref, scale_to_bit_depth=False, ref_already_convolved=True
+                )
+                code_data[code][file_name_key]['normalized_hologram'] = grayscale
+                code_data[code][file_name_key]['known_intensity'] = known_intensity
 
-    print("Code Number\tProtein Concentration\tMean Pixel Intensity\tStdev Pixel Intensity\tNumber of Particles Counted")
+    print(
+        'Code Number\tProtein Concentration\tMean Pixel Intensity\tStdev Pixel Intensity\tNumber of Particles Counted'
+    )
     for code, code_data in code_data.items():
         intensity_dict = {}
         for file_name, file_data in code_data.items():
-            grayscale = file_data["normalized_hologram"]
-            locations = file_data["particle_locations"]
-            intensity = file_data["known_intensity"]
-            intensity_estimate = helper_functions.find_intensity(
-                grayscale, locations)
+            grayscale = file_data['normalized_hologram']
+            locations = file_data['particle_locations']
+            intensity = file_data['known_intensity']
+            intensity_estimate = helper_functions.find_intensity(grayscale, locations)
             if intensity not in intensity_dict.keys():
                 intensity_dict[intensity] = intensity_estimate
             else:
@@ -676,11 +665,19 @@ def find_particle_intensities():
         intensity_data = []
         for intensity, estimates in intensity_dict.items():
             intensity_data.append(
-                (intensity, np.mean(estimates), np.std(estimates), len(estimates)))
+                (intensity, np.mean(estimates), np.std(estimates), len(estimates))
+            )
 
         intensity_data = sorted(intensity_data, key=lambda x: x[0])
         for arg in intensity_data:
             intensity, avg_intensity_estimate, intensity_estimate_std, particle_count = arg
-            print("{}\t{}\t{}\t{}\t{}".format(code, intensity,
-                  avg_intensity_estimate, intensity_estimate_std, particle_count))
+            print(
+                '{}\t{}\t{}\t{}\t{}'.format(
+                    code,
+                    intensity,
+                    avg_intensity_estimate,
+                    intensity_estimate_std,
+                    particle_count,
+                )
+            )
         print()
