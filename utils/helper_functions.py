@@ -2,6 +2,7 @@ import numpy as np
 import torch.nn as nn
 import torch
 from scipy.signal import convolve2d
+
 # from object_detection import RegionDetector
 import cv2
 import numpy as np
@@ -25,8 +26,7 @@ def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=1
     # at the current pixel. Then, we will compute the average value of every pixel in side this square, and set
     # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
     # image to use for normalization.
-    averaged_reference_image = convolve2d(
-        reference_image, convolution_kernel, mode='same')
+    averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
 
     # Normalize hologram by reference image.
     normalized_hologram = hologram_image / averaged_reference_image
@@ -112,8 +112,7 @@ def non_max_suppression_fast(boxes, maximum_acceptable_overlap, return_picks=Fal
 
         # delete all indexes from the index list that exceed the maximum overlap threshold
         idxs = np.delete(
-            idxs, np.concatenate(
-                ([last], np.where(overlap > maximum_acceptable_overlap)[0])),
+            idxs, np.concatenate(([last], np.where(overlap > maximum_acceptable_overlap)[0])),
         )
 
     if return_picks:
@@ -177,8 +176,7 @@ def load_data(folder_path, verbose=True):
 
         # Load region.
         region = cv2.imread(
-            os.path.join(positive_sample_folder,
-                         file_name), cv2.IMREAD_ANYDEPTH
+            os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
         )
         label = 1
 
@@ -197,8 +195,7 @@ def load_data(folder_path, verbose=True):
 
         # Load region.
         region = cv2.imread(
-            os.path.join(negative_sample_folder,
-                         file_name), cv2.IMREAD_ANYDEPTH
+            os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
         )
         label = 0
         # Append region and negative label to dataset.
@@ -244,8 +241,7 @@ def load_code(code_folder_path, verbose=True):
             continue
 
         # Load region.
-        region = cv2.imread(os.path.join(
-            code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+        region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
         try:
             label = int(file_name[0:2].strip('()'))
             assert label == code_designation
