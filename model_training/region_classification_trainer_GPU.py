@@ -11,8 +11,6 @@ from tqdm import tqdm
 from datetime import datetime
 
 # Prints augmented images out for debugging
-
-
 def print_images(
     sample_batch_tensor,
     path: str = None,
@@ -421,7 +419,7 @@ class RegionClassifierTrainerGPU(object):
 
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
-        loss = self.loss_fn(predictions, labels).item()
+        loss = self.loss_fn(predictions.to(torch.float64), labels.to(torch.int64)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
 
         # Set the model back to training mode.

@@ -536,3 +536,50 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
     print('  Params: ')
     for key, value in trial.params.items():
         print('    {}: {}'.format(key, value))
+
+def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
+    # Currently only implemented for the Jupyter notebook pipeline,
+    assert pipeline_inputs is not None
+    # Create an OpTuna study, maximize the accuracy
+    study = optuna.create_study(direction='maximize')
+    # By default, OpTuna objective functions for objective minimization/maximization does not accept custom input variables
+    # However, we can easily accomodate custom input variables in this way with some lambda operations,
+
+    def objective_with_custom_input(trial):
+        return bayesian.objective_region_classifier(trial, pipeline_inputs)
+
+    study = bayesian.checkpoint_study(
+        study,
+        objective_with_custom_input,
+        num_trials=pipeline_inputs['num_hpo'],
+        checkpoint_every=pipeline_inputs['save_every'],
+        checkpoint_path=os.path.join(
+            pipeline_inputs['checkpoint_path'], pipeline_inputs['timestamp']
+        ),
+    )
+
+    """# Optimize the study
+    study.optimize(objective_with_custom_input, 
+                    n_trials=pipeline_inputs["num_hpo"], 
+                    timeout=pipeline_inputs["timeout"],
+                    callbacks=[pruning_callback])"""
+
+    # Get the pruned trials (trials pruned prematurely)
+    pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
+    # Get the completed trials
+    complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
+
+    # Summarize
+    print('\n\nStudy statistics: ')
+    print('  Number of finished trials: ', len(study.trials))
+    print('  Number of pruned trials: ', len(pruned_trials))
+    print('  Number of complete trials: ', len(complete_trials))
+
+    print('Best trial:')
+    trial = study.best_trial
+
+    print('  Value: ', trial.value)
+
+    print('  Params: ')
+    for key, value in trial.params.items():
+        print('    {}: {}'.format(key, value))

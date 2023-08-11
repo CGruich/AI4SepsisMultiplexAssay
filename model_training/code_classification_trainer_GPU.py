@@ -11,8 +11,6 @@ from tqdm import tqdm
 from datetime import datetime
 
 # Prints augmented images out for debugging
-
-
 def print_images(
     sample_batch_tensor,
     path: str = None,
@@ -29,7 +27,6 @@ def print_images(
             image_pil = image_pil_tf(image_tensor)
             filename = batch_id + '_' + str(image_index) + '.png'
             image_pil.save(os.path.join(path, filename))
-
 
 class CodeClassifierTrainerGPU(object):
     def __init__(
@@ -220,7 +217,6 @@ class CodeClassifierTrainerGPU(object):
                 # But the cross-entropy loss function accepts class labels from 0 ... N-1
                 # Here, we just decrement by 1 to match this convention
                 # CrossEntropyLoss() accepts unnormalized prediction logits
-                # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
                 # print('PREDICTIONS IN TRAINING LOOP')
                 # print(predictions)
                 # print(type(predictions))
@@ -453,7 +449,6 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         # CrossEntropyLoss() accepts unnormalized prediction logits
-        # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
         loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
         print('Val Acc:')
@@ -487,7 +482,6 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         # CrossEntropyLoss() accepts unnormalized prediction logits
-        # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
         loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
         print('Test Acc:')
