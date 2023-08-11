@@ -537,6 +537,7 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
     for key, value in trial.params.items():
         print('    {}: {}'.format(key, value))
 
+
 def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
     # Currently only implemented for the Jupyter notebook pipeline,
     assert pipeline_inputs is not None

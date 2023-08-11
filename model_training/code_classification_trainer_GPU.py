@@ -11,6 +11,8 @@ from tqdm import tqdm
 from datetime import datetime
 
 # Prints augmented images out for debugging
+
+
 def print_images(
     sample_batch_tensor,
     path: str = None,
@@ -27,6 +29,7 @@ def print_images(
             image_pil = image_pil_tf(image_tensor)
             filename = batch_id + '_' + str(image_index) + '.png'
             image_pil.save(os.path.join(path, filename))
+
 
 class CodeClassifierTrainerGPU(object):
     def __init__(

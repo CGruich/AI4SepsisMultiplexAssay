@@ -11,6 +11,8 @@ from tqdm import tqdm
 from datetime import datetime
 
 # Prints augmented images out for debugging
+
+
 def print_images(
     sample_batch_tensor,
     path: str = None,
