@@ -12,6 +12,7 @@ from datetime import datetime
 
 # Prints augmented images out for debugging
 
+
 def print_images(
     sample_batch_tensor,
     path: str = None,
@@ -199,11 +200,11 @@ class CodeClassifierTrainerGPU(object):
                 # Moving the model to GPU is in-place, but moving the data is not.
                 samples = samples.to(self.device)
                 labels = labels.to(self.device)
-                #print('DEBUG LABELS IN TRAINING LOOP')
-                #print(labels)
+                # print('DEBUG LABELS IN TRAINING LOOP')
+                # print(labels)
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
-                '''predicted_labels = (
+                """predicted_labels = (
                     # Argmax gets the position of the class,
                     # For example, class 1 is at position 0.
                     # To convert this position 0 into the corresponding class, increment by 1.
@@ -212,7 +213,7 @@ class CodeClassifierTrainerGPU(object):
                     .clone()
                     .detach()
                     .requires_grad_(True)
-                )'''
+                )"""
 
                 # Compute the loss and take one step along the gradient.
                 # Our barcodes are labelled from 1 ... N
@@ -220,19 +221,21 @@ class CodeClassifierTrainerGPU(object):
                 # Here, we just decrement by 1 to match this convention
                 # CrossEntropyLoss() accepts unnormalized prediction logits
                 # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
-                #print('PREDICTIONS IN TRAINING LOOP')
-                #print(predictions)
-                #print(type(predictions))
-                #print('LABELS IN TRAINING LOOP')
-                #print(labels)
-                #print(type(labels))
+                # print('PREDICTIONS IN TRAINING LOOP')
+                # print(predictions)
+                # print(type(predictions))
+                # print('LABELS IN TRAINING LOOP')
+                # print(labels)
+                # print(type(labels))
                 loss = loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64))
 
                 loss.backward()
                 optimizer.step()
 
                 # Compute the accuracy
-                train_acc += self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
+                train_acc += self.compute_accuracy(
+                    labels.clone().detach(), predictions.clone().detach()
+                )
                 train_loss += loss.detach().item()
 
             # Report training loss, training accuracy, validation loss, validation accuracy, and test loss/accuracy.
@@ -497,19 +500,16 @@ class CodeClassifierTrainerGPU(object):
         return loss, acc
 
     @torch.no_grad()
-    def compute_accuracy(self, 
-                         labels, 
-                         logits,
-                         softmax=nn.Softmax()):
+    def compute_accuracy(self, labels, logits, softmax=nn.Softmax()):
         """
         Function to compute the accuracy of a batch of predictions given a batch of labels.
         :param labels: Ground-truth labels to compare to.
         :param predicted_labels: Predicted labels from the model.
         :return: Computed accuracy.
         """
-        print("logits compute_accuracy()")
+        print('logits compute_accuracy()')
         print(logits)
-        print("softmax logits compute_accuracy")
+        print('softmax logits compute_accuracy')
         softmax_logits = softmax(logits)
         print(softmax_logits)
 
@@ -562,8 +562,8 @@ class CodeClassifierTrainerGPU(object):
             v_labels.append(label)
             v_regions.append(np.array(region[0][0], dtype=np.float32))
         v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.float32)
-        #print('VALIDATION_LABELS')
-        #print(v_labels)
+        # print('VALIDATION_LABELS')
+        # print(v_labels)
         v_regions = torch.as_tensor(np.array(v_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(
@@ -582,8 +582,8 @@ class CodeClassifierTrainerGPU(object):
             t_labels.append(label)
             t_regions.append(np.array(region[0][0], dtype=np.float32))
         t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.float32)
-        #print('TEST LABELS')
-        #print(v_labels)
+        # print('TEST LABELS')
+        # print(v_labels)
         t_regions = torch.as_tensor(np.array(t_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(
