@@ -57,7 +57,10 @@ class RegionClassifierTrainerGPU(object):
         if self.verbose:
             print('CUDA Availability: ' + str(torch.cuda.is_available()))
 
-        self.model = RegionClassifier(h1=fc_size, dropout=dropout_rate, verbose=self.verbose)
+        self.model = RegionClassifier(fc_size=fc_size,
+                                      fc_num=fc_num, 
+                                      dropout_rate=dropout_rate, 
+                                      )
 
         # Print the model architecture as a sanity check
         if self.verbose:
@@ -177,7 +180,6 @@ class RegionClassifierTrainerGPU(object):
         best_val_loss = np.inf
         self.test_loss_for_best_val = np.inf
         self.test_acc_for_best_val = np.inf
-        # Start check around here, Cameron Gruich
 
         # For each epoch
         for epoch in range(self.n_epochs + 1):
@@ -240,10 +242,6 @@ class RegionClassifierTrainerGPU(object):
             self.losses['vl'].append(val_loss)
             self.losses['test_loss'].append(test_loss)
             self.losses['epoch'].append(epoch)
-
-            # CG: Legacy Code
-            # print("EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n".format(
-            #      epoch, train_loss, train_acc, val_loss, val_acc))
 
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:

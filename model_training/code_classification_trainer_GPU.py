@@ -147,7 +147,9 @@ class CodeClassifierTrainerGPU(object):
                 os.path.join(self.model_save_path, self.log_timestamp, 'logs')
             )
 
-    def train(self, cross_validation=False, cross_validation_scores=None):
+    def train(self, 
+              cross_validation: bool = False, 
+              cross_validation_scores=None):
         """
         Function to train a classifier on hologram regions.
         :return: None.
@@ -200,7 +202,8 @@ class CodeClassifierTrainerGPU(object):
                 # Moving the model to GPU is in-place, but moving the data is not.
                 samples = samples.to(self.device)
                 labels = labels.to(self.device)
-
+                print("DEBUG LABELS IN TRAINING LOOP")
+                print(labels)
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
                 predicted_labels = (
@@ -220,7 +223,13 @@ class CodeClassifierTrainerGPU(object):
                 # Here, we just decrement by 1 to match this convention
                 # CrossEntropyLoss() accepts unnormalized prediction logits
                 # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
-                loss = loss_fn(predictions, (labels - 1))
+                print("PREDICTIONS IN TRAINING LOOP")
+                print(predictions)
+                print(type(predictions))
+                print("LABELS IN TRAINING LOOP")
+                print(labels)
+                print(type(labels))
+                loss = loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64))
 
                 loss.backward()
                 optimizer.step()
@@ -446,7 +455,7 @@ class CodeClassifierTrainerGPU(object):
         predicted_labels = (torch.argmax(predictions, dim=1) + 1).float()
         # CrossEntropyLoss() accepts unnormalized prediction logits
         # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
-        loss = self.loss_fn(predictions, labels - 1).item()
+        loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
         acc = self.compute_accuracy(labels, predicted_labels)
 
         # Set the model back to training mode.
@@ -479,7 +488,7 @@ class CodeClassifierTrainerGPU(object):
         predicted_labels = (torch.argmax(predictions, dim=1) + 1).float()
         # CrossEntropyLoss() accepts unnormalized prediction logits
         # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
-        loss = self.loss_fn(predictions, labels - 1).item()
+        loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
         acc = self.compute_accuracy(labels, predicted_labels)
 
         # Set the model back to training mode.
@@ -498,9 +507,9 @@ class CodeClassifierTrainerGPU(object):
         """
 
         predicted_labels = predicted_labels.argmax(dim=-1) + 1
-        print('predicted_labels')
+        print('predicted_labels compute_accuracy()')
         print(predicted_labels)
-        print('labels')
+        print('labels compute_accuracy()')
         print(labels)
 
         n_samples = labels.shape[0]
@@ -547,8 +556,9 @@ class CodeClassifierTrainerGPU(object):
         for region, label in zip(val_data, val_targets):
             v_labels.append(label)
             v_regions.append(np.array(region[0][0], dtype=np.float32))
-
         v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.float32)
+        print("VALIDATION_LABELS")
+        print(v_labels)
         v_regions = torch.as_tensor(np.array(v_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(
@@ -567,6 +577,8 @@ class CodeClassifierTrainerGPU(object):
             t_labels.append(label)
             t_regions.append(np.array(region[0][0], dtype=np.float32))
         t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.float32)
+        print("TEST LABELS")
+        print(v_labels)
         t_regions = torch.as_tensor(np.array(t_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(
