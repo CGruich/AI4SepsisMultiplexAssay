@@ -22,7 +22,7 @@ def objective_code_classifier(trial, pipeline_inputs: dict = None):
     dr = trial.suggest_float('dropout_rate', 0.0, 0.8)
 
     # Dictionary of hyperparameters
-    hyper_dict = {'lr': lr, 'bs': bs, 'fcSize': fcSize, 'fcNum': fcNum, 'dr': dr}
+    hyper_dict = {'lr': lr, 'bs': bs, 'fc_size': fcSize, 'fc_num': fcNum, 'dr': dr}
 
     # Run stratified k-fold cross-validation with the hyperparameters
     # Via the pipeline functionality of the workflow,
