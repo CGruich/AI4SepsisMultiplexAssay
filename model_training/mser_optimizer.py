@@ -41,8 +41,7 @@ class MSEROptimizer(object):
             'edge_blur_size': (0, 1000),
         }
 
-        optimizer = bayes_opt.BayesianOptimization(
-            self.evaluate, ranges, verbose=1)
+        optimizer = bayes_opt.BayesianOptimization(self.evaluate, ranges, verbose=1)
         optimizer.maximize(init_points=50, n_iter=self.num_iterations)
 
         if self.save_filename is not None:
