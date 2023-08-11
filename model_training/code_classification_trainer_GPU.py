@@ -53,7 +53,8 @@ class CodeClassifierTrainerGPU(object):
         self.verbose = verbose
 
         # CG: CPU or GPU, prioritizes GPU if available.
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(
+            'cuda:0' if torch.cuda.is_available() else 'cpu')
         # Print availability to GPU
         if self.verbose:
             print('CUDA Availability: ' + str(torch.cuda.is_available()))
@@ -74,7 +75,8 @@ class CodeClassifierTrainerGPU(object):
         self.model.to(self.device)
         # Check if model is on GPU
         if self.verbose:
-            print('Model Loaded to GPU: ' + str(next(self.model.parameters()).is_cuda))
+            print('Model Loaded to GPU: ' +
+                  str(next(self.model.parameters()).is_cuda))
 
         self.train_data = None
         self.val_data = None
@@ -137,7 +139,8 @@ class CodeClassifierTrainerGPU(object):
         self.warmup = 20
 
         # Using the Adam optimizer
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(
+            self.model.parameters(), lr=self.learning_rate)
         # Cross Entropy Loss for multi-class problems
         self.loss_fn = nn.CrossEntropyLoss()
 
@@ -227,7 +230,8 @@ class CodeClassifierTrainerGPU(object):
                 # print('LABELS IN TRAINING LOOP')
                 # print(labels)
                 # print(type(labels))
-                loss = loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64))
+                loss = loss_fn(predictions.to(torch.float64),
+                               (labels - 1).to(torch.int64))
 
                 loss.backward()
                 optimizer.step()
@@ -251,7 +255,8 @@ class CodeClassifierTrainerGPU(object):
                 # Write the loss and accuracies to tensorboard
                 writer.add_scalars(
                     'Loss',
-                    {'Train_Loss': train_loss, 'Val_Loss': val_loss, 'Test_Loss': test_loss,},
+                    {'Train_Loss': train_loss, 'Val_Loss': val_loss,
+                        'Test_Loss': test_loss, },
                     epoch,
                 )
                 writer.add_scalars(
@@ -314,8 +319,10 @@ class CodeClassifierTrainerGPU(object):
         if cross_validation:
             cross_validation_scores['Val_Loss'].append(best_val_loss)
             cross_validation_scores['Val_Acc'].append(self.best_val_acc)
-            cross_validation_scores['Test_Loss'].append(self.test_loss_for_best_val)
-            cross_validation_scores['Test_Acc'].append(self.test_acc_for_best_val)
+            cross_validation_scores['Test_Loss'].append(
+                self.test_loss_for_best_val)
+            cross_validation_scores['Test_Acc'].append(
+                self.test_acc_for_best_val)
             return cross_validation_scores
 
     def generate_batches(self, data):
@@ -336,7 +343,7 @@ class CodeClassifierTrainerGPU(object):
         bs = self.batch_size
         for i in range(len(data) // bs):
             # Choose our random batch.
-            idxs = indices[i * bs : i * bs + bs]
+            idxs = indices[i * bs: i * bs + bs]
             batch = data[idxs]
 
             # CG: Enable if not work
@@ -356,7 +363,8 @@ class CodeClassifierTrainerGPU(object):
                 labels.append(label)
 
             # Cast batch to tensor for PyTorch.
-            samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
+            samples = torch.as_tensor(
+                np.array(samples, dtype=np.int32), dtype=torch.float32)
             # print("Samples before Augmentation")
             # print(samples)
             print_images(
@@ -376,7 +384,8 @@ class CodeClassifierTrainerGPU(object):
                     # print("single_image")
                     # print(single_image.shape)
                     single_image_pil = transforms.ToPILImage()(single_image)
-                    tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
+                    tf = transforms.RandomRotation(
+                        degrees=np.random.randint(0, 365))
                     single_image_pil = tf(single_image_pil)
                     # Convert back to PyTorch tensor when done.
                     sample = transforms.ToTensor()(single_image_pil)
@@ -419,7 +428,8 @@ class CodeClassifierTrainerGPU(object):
                     activate=self.debug,
                 )
 
-            labels = torch.as_tensor(np.array(labels, dtype=np.int32), dtype=torch.float32)
+            labels = torch.as_tensor(
+                np.array(labels, dtype=np.int32), dtype=torch.float32)
 
             # CG: Enable if not work
             # print("Augmented samples")
@@ -454,8 +464,10 @@ class CodeClassifierTrainerGPU(object):
         predictions = self.model.forward(samples)
         # CrossEntropyLoss() accepts unnormalized prediction logits
         # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
-        loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
-        acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
+        loss = self.loss_fn(predictions.to(torch.float64),
+                            (labels - 1).to(torch.int64)).item()
+        acc = self.compute_accuracy(
+            labels.clone().detach(), predictions.clone().detach())
         print('Val Acc:')
         print(acc)
 
@@ -488,8 +500,10 @@ class CodeClassifierTrainerGPU(object):
         predictions = self.model.forward(samples)
         # CrossEntropyLoss() accepts unnormalized prediction logits
         # CG: ERROR: PROBABLY NEED TO ADJUST (labels - 1) TO MATCH INPUT CONVENTION.
-        loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
-        acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
+        loss = self.loss_fn(predictions.to(torch.float64),
+                            (labels - 1).to(torch.int64)).item()
+        acc = self.compute_accuracy(
+            labels.clone().detach(), predictions.clone().detach())
         print('Test Acc:')
         print(acc)
 
@@ -564,10 +578,12 @@ class CodeClassifierTrainerGPU(object):
         for region, label in zip(val_data, val_targets):
             v_labels.append(label)
             v_regions.append(np.array(region[0][0], dtype=np.float32))
-        v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.float32)
+        v_labels = torch.as_tensor(
+            np.array(v_labels, dtype=np.int32), dtype=torch.float32)
         # print('VALIDATION_LABELS')
         # print(v_labels)
-        v_regions = torch.as_tensor(np.array(v_regions, dtype=np.int32), dtype=torch.float32)
+        v_regions = torch.as_tensor(
+            np.array(v_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(
             v_regions,
@@ -584,10 +600,12 @@ class CodeClassifierTrainerGPU(object):
         for region, label in zip(test_dataset, train_targets):
             t_labels.append(label)
             t_regions.append(np.array(region[0][0], dtype=np.float32))
-        t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.float32)
+        t_labels = torch.as_tensor(
+            np.array(t_labels, dtype=np.int32), dtype=torch.float32)
         # print('TEST LABELS')
         # print(v_labels)
-        t_regions = torch.as_tensor(np.array(t_regions, dtype=np.int32), dtype=torch.float32)
+        t_regions = torch.as_tensor(
+            np.array(t_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(
             t_regions,
