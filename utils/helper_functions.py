@@ -2,7 +2,8 @@ import numpy as np
 import torch.nn as nn
 import torch
 from scipy.signal import convolve2d
-
+from pathlib import Path
+import json
 # from object_detection import RegionDetector
 import cv2
 import numpy as np
@@ -12,7 +13,7 @@ import itertools
 import re as regex
 
 
-def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=16):
+def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=16, scale_to_bit_depth=True, ref_already_convolved=False):
     conv_window_size = conv_window_size
     convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (
         conv_window_size * conv_window_size
@@ -26,16 +27,22 @@ def normalize_by_reference(hologram, reference, conv_window_size=10, bit_depth=1
     # at the current pixel. Then, we will compute the average value of every pixel in side this square, and set
     # the pixel at the current coordinates inside a new image to that value. This gives us a significantly better
     # image to use for normalization.
-    averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
+    if not ref_already_convolved:
+        averaged_reference_image = convolve2d(reference_image, convolution_kernel, mode='same')
+    else:
+        averaged_reference_image = reference_image
 
     # Normalize hologram by reference image.
     normalized_hologram = hologram_image / averaged_reference_image
 
-    # Transform the normalized image into the appropriate bit-depth.
-    grayscale_hologram = normalized_hologram * 2 ** 16
-    grayscale_hologram = grayscale_hologram.clip(0, 2 ** 16 - 1).astype(
-        'uint{}'.format(bit_depth)
-    )
+    if scale_to_bit_depth:
+        # Transform the normalized image into the appropriate bit-depth.
+        grayscale_hologram = normalized_hologram * 2 ** 16
+        grayscale_hologram = grayscale_hologram.clip(0, 2 ** 16 - 1).astype(
+            'uint{}'.format(bit_depth)
+        )
+    else:
+        grayscale_hologram = normalized_hologram
     return grayscale_hologram
 
 
@@ -259,3 +266,110 @@ def load_code(code_folder_path, verbose=True):
 
     # Return dataset for one code
     return data
+
+
+def find_intensity(normalized_hologram, particle_locations):
+        window_x = 20
+        window_y = 20
+        h,w = normalized_hologram.shape
+
+        intensities = []
+
+        for coord in particle_locations["particle_locations"]:
+            x,y = coord
+            left = max(x-window_x, 0)
+            right = min(x+window_x, w)
+            top = max(y-window_y, 0)
+            bottom = min(y+window_y, h)
+            region = normalized_hologram[top:bottom, left:right]
+            region_intensity = region.mean()
+            intensities.append(region_intensity)
+
+        return intensities
+
+def load_and_normalize(raw_directory, code_list, color=False, one_ref_per_img=True):
+    for code in code_list:
+        # If we are processing colored images of the barcoded particles,
+        if color:
+            # The directory of all the raw images for a particular code color (e.g., (1))
+            code_raw_directory = os.path.join(raw_directory, 'code ' + code + ' color')
+            print(f'Examining Code {code}\n{code_raw_directory}')
+
+        # Or if we are processing greyscale images of the barcoded particles,
+        else:
+            # The directory of all the raw images for a particular code (e.g., (1))
+            code_raw_directory = os.path.join(raw_directory, 'code ' + code)
+            print(f'Examining Code {code}\n{code_raw_directory}')
+
+        # Load
+        # Image naming convention: 1.tiff or (for a reference image) 1_ref.tiff
+        raw_img_names = []
+        reference_img_names = []
+        particle_location_names = []
+
+        for file_name in os.listdir(code_raw_directory):
+            if 'amp' in file_name or 'phase' in file_name or 'MSER' in file_name:
+                continue
+
+            if 'ref' in file_name:
+                reference_img_names.append(file_name)
+            elif 'particle_locations' in file_name:
+                particle_location_names.append(file_name)
+            else:
+                raw_img_names.append(file_name)
+
+        # Image filenames will be loaded in parallel. e.g., "1.tiff" will be loaded with its own reference image "1_ref.tiff"
+        # Here we ensure the file names are sorted alphanumerically so each file name is paired with the appropriate reference
+        # and particle position list.
+        sort_alphanumeric(raw_img_names)
+        sort_alphanumeric(particle_location_names)
+        sort_alphanumeric(reference_img_names)
+
+        print(f'Loading Raw Images:\n{raw_img_names}')
+        print(f'Loading Reference Images:\n{reference_img_names}')
+        print(f'Loading Particle Locations:\n{particle_location_names}')
+
+        # Ensure we have as many reference images as we do raw images
+        assert len(raw_img_names) == len(reference_img_names)
+
+        holograms = []
+        references = []
+        grayscales = []
+        particle_locations = []
+
+        if not one_ref_per_img:
+            reference_img_path = os.path.join(code_raw_directory, "ref.tiff")
+            references.append(cv2.imread(reference_img_path, cv2.IMREAD_ANYDEPTH))
+
+        for i in range(len(raw_img_names)):
+            raw_img_path = os.path.join(code_raw_directory, raw_img_names[i])
+            reference_img_path = os.path.join(code_raw_directory, reference_img_names[i])
+            particle_location_path = os.path.join(code_raw_directory, particle_location_names[i])
+
+            print(f'Raw Image Path: {raw_img_path}')
+            print(f'Reference Image Path: {reference_img_path}')
+            print(f'Particle Locations Path: {particle_location_path}\n')
+
+            assert Path(raw_img_path).is_file() and Path(reference_img_path).is_file()
+
+            holograms.append(cv2.imread(raw_img_path, cv2.IMREAD_ANYDEPTH))
+            if one_ref_per_img:
+                references.append(cv2.imread(reference_img_path, cv2.IMREAD_ANYDEPTH))
+
+            with open(particle_location_path, 'r') as particle_file:
+                particle_locations_json = dict(json.load(particle_file))
+
+            particle_locations_list = list(particle_locations_json['particle_locations'])
+            particle_locations.append(particle_locations_list)
+
+        for i in range(len(holograms)):
+            hologram_image = holograms[i]
+            if one_ref_per_img:
+                reference_image = references[i]
+            else:
+                reference_image = references[0]
+
+            grayscale_hologram = normalize_by_reference(hologram_image, reference_image)
+            grayscales.append(grayscale_hologram)
+
+        return grayscales, particle_locations
