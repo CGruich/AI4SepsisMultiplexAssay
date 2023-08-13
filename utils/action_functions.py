@@ -173,22 +173,49 @@ def find_mser_params(pipeline_inputs: dict):
 
 def train_region_classifier(
     pipeline_inputs: dict = None,
-    load_data_path='data/classifier_training_samples',
-    model_save_path='data/models/region',
-    cross_validate=False,
-    k=5,
-    hpo_trial=None,
-    random_state=100,
-    verbose=True,
-    log=True,
+    load_data_path: str = 'data/classifier_training_samples',
+    model_save_path: str = 'data/models/region',
+    val_size: int = 0.20,
+    cross_validate: bool = False,
+    k: int = 5,
+    random_state: int = 100,
+    verbose: bool = True,
+    log: bool = True,
     timestamp: str = None,
+    save_every_n: int = 1,
+    # Hyperparameters
+    batch_size: int = 192,
+    lr: float = 3e-4,
+    fc_size: int = 64,
+    fc_num: int = 2,
+    dropout_rate: float = 0.3,
 ):
-    if timestamp is None:
-        timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
 
     # Train a new classifier with the data located under
     # data/classifier_training_samples/positive and
     # data/classifier_training_samples/negative
+
+    if pipeline_inputs is not None:
+        load_data_path = pipeline_inputs["sample_parent_directory"]
+        model_save_path = pipeline_inputs["model_save_parent_directory"]
+        val_size = pipeline_inputs["val_size"]
+        cross_validate = pipeline_inputs["strat_kfold"]["activate"]
+        k = pipeline_inputs["strat_kfold"]["num_folds"]
+        random_state = pipeline_inputs["strat_kfold"]["random_state"]
+        verbose = pipeline_inputs["verbose"]
+        log = pipeline_inputs["log"]
+        timestamp = pipeline_inputs["timestamp"]
+        save_every_n = pipeline_inputs["save_every_n"]
+
+        # Hyperparameters
+        batch_size = pipeline_inputs["batch_size"]
+        lr = pipeline_inputs["lr"]
+        fc_size = pipeline_inputs["fc_size"]
+        fc_num = pipeline_inputs["fc_num"]
+        dropout_rate = pipeline_inputs["dropout_rate"]
+
+    if timestamp is None:
+        timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
 
     # Returns list of lists
     data_list = helper_functions.load_data(load_data_path, verbose=verbose)
@@ -203,66 +230,62 @@ def train_region_classifier(
     # Do a stratified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
     training_data, validation_data = train_test_split(
-        dataset, test_size=0.20, stratify=targets
+        dataset, test_size=val_size, stratify=targets
     )
     training_targets = np.asarray(list(zip(*training_data))[-1])
 
     # CG: Stratified k-Fold cross-validation
-    if cross_validate:
-        # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
-        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state)
+    # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
+    splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state)
 
-        training_data_idx = np.arange(len(training_data))
-        cross_val_scores = {
-            'Val_Loss': [],
-            'Val_Acc': [],
-            'Test_Loss': [],
-            'Test_Acc': [],
-        }
-        fold_index = 1
-        # For each fold, define training data indices and validation data indices from the input training dataset
-        for fold, (train_idx, val_idx) in enumerate(
-            splits.split(training_data_idx, y=training_targets)
-        ):
-            if verbose:
-                print('\n\nFold {}'.format(fold + 1))
-            # Define a region classifier
-            trainer = RegionClassifierTrainerGPU(
-                model_save_path=model_save_path,
-                hpo_trial=hpo_trial,
-                verbose=verbose,
-                log=log,
-                timestamp=timestamp,
-                k=fold_index,
-            )
-            trainer.load_data(
-                load_data_path,
-                training_data,
-                train_idx,
-                val_idx,
-                test_dataset=validation_data,
-            )
-            # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
-            cross_val_scores = trainer.train(
-                cross_validate=cross_validate, cross_val_scores=cross_val_scores
-            )
-            # Keep track of what k-fold we are on for book-keeping
-            fold_index = fold_index + 1
-
+    training_data_idx = np.arange(len(training_data))
+    cross_val_scores = {
+        'Val_Loss': [],
+        'Val_Acc': [],
+        'Test_Loss': [],
+        'Test_Acc': [],
+    }
+    fold_index = 1
+    # For each fold, define training data indices and validation data indices from the input training dataset
+    for fold, (train_idx, val_idx) in enumerate(
+        splits.split(training_data_idx, y=training_targets)
+    ):
         if verbose:
-            print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
-            print(cross_val_scores)
-            # Average cross-validation scores
-            for key, value in cross_val_scores.items():
-                print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
-        return cross_val_scores
-    # If not cross-validating,
-    else:
+            print('\n\nFold {}'.format(fold + 1))
+        # Define a region classifier
         trainer = RegionClassifierTrainerGPU(
-            model_save_path=model_save_path, hpo_trial=hpo_trial, verbose=verbose, log=log,
+            model_save_path=model_save_path,
+            save_every_n=save_every_n,
+            batch_size=batch_size,
+            lr=lr,
+            fc_size=fc_size,
+            fc_num=fc_num,
+            dropout_rate=dropout_rate,
+            verbose=verbose,
+            log=log,
+            timestamp=timestamp,
         )
-        trainer.load_data(load_data_path, dataset, train_idx=None, val_idx=None)
-        trainer.train(cross_validate=False, cross_val_scores=None)
+        trainer.load_data(
+            load_data_path,
+            training_data,
+            train_idx,
+            val_idx,
+            test_dataset=validation_data,
+        )
+        # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
+        cross_val_scores = trainer.train(
+            cross_validate=cross_validate, cross_validation_scores=cross_val_scores
+        )
+        # Keep track of what k-fold we are on for book-keeping
+        fold_index = fold_index + 1
+
+    if verbose:
+        print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
+        print(cross_val_scores)
+        # Average cross-validation scores
+        for key, value in cross_val_scores.items():
+            print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
+    return cross_val_scores
 
 
 def classify_regions(pipeline_inputs: dict = None):
