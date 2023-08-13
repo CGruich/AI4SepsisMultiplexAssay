@@ -584,3 +584,100 @@ def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
     print('  Params: ')
     for key, value in trial.params.items():
         print('    {}: {}'.format(key, value))
+
+
+def find_particle_intensities():
+    from scipy.signal import convolve2d
+
+    conv_window_size = 10
+    convolution_kernel = np.ones((conv_window_size, conv_window_size)) / (
+        conv_window_size * conv_window_size
+    )
+
+    dropbox_path = (
+        'E:/Dropbox/Dropbox (Partners HealthCare)/DL_training/data/raw/Protein assay'
+    )
+    code_paths = [
+        'code 1_IL-1/230529_IL-1 [Dz 9~9.5]',
+        'code 2_IL-3/230520_IL-3 [Dz 9~9.5]',
+        'code 3_IL-6/230601_IL-6 [Dz 9~9.5]',
+        'code 4_IL-10/230606_IL-10 [Dz 9.5]',
+        'code 5_TNF-a/230615_TNF-a [Dz 9.5]',
+        'code 6_ANG-2/230425_ANG-2 [Dz 10]',
+    ]
+    # code_paths = ["code 1_IL-1/230529_IL-1 [Dz 9~9.5]"]
+
+    code_data = {}
+    for code_path in code_paths:
+        full_path = os.path.join(dropbox_path, code_path)
+
+        ref = cv2.imread(os.path.join(full_path, 'ref.tiff'), cv2.IMREAD_ANYDEPTH).astype(
+            np.float32
+        )
+        ref = convolve2d(ref, convolution_kernel, mode='same')
+
+        code = code_path[: code_path.find('_')]
+        code_data[code] = {}
+        for file_name in os.listdir(full_path):
+            if 'trol' in file_name or 'ref' in file_name:
+                continue
+
+            print('Loading', file_name)
+
+            if '.json' in file_name:
+                file_name_key = file_name[: file_name.rfind('_particle_locations')]
+                if file_name_key not in code_data[code].keys():
+                    code_data[code][file_name_key] = {}
+
+                file = open(os.path.join(full_path, file_name), 'r')
+                code_data[code][file_name_key]['particle_locations'] = dict(json.load(file))
+            else:
+                file_name_key = file_name[: file_name.rfind('.tiff')]
+                if file_name_key not in code_data[code].keys():
+                    code_data[code][file_name_key] = {}
+
+                intensity_str = file_name[: file_name.find('_')]
+                stripped = intensity_str.replace('.tif', "")
+                stripped = stripped.replace('.tiff', "")
+                known_intensity = int(stripped)
+                hologram = cv2.imread(os.path.join(full_path, file_name), cv2.IMREAD_ANYDEPTH)
+                grayscale = helper_functions.normalize_by_reference(
+                    hologram, ref, scale_to_bit_depth=False, ref_already_convolved=True
+                )
+                code_data[code][file_name_key]['normalized_hologram'] = grayscale
+                code_data[code][file_name_key]['known_intensity'] = known_intensity
+
+    print(
+        'Code Number\tProtein Concentration\tMean Pixel Intensity\tStdev Pixel Intensity\tNumber of Particles Counted'
+    )
+    for code, code_data in code_data.items():
+        intensity_dict = {}
+        for file_name, file_data in code_data.items():
+            grayscale = file_data['normalized_hologram']
+            locations = file_data['particle_locations']
+            intensity = file_data['known_intensity']
+            intensity_estimate = helper_functions.find_intensity(grayscale, locations)
+            if intensity not in intensity_dict.keys():
+                intensity_dict[intensity] = intensity_estimate
+            else:
+                intensity_dict[intensity] += intensity_estimate
+
+        intensity_data = []
+        for intensity, estimates in intensity_dict.items():
+            intensity_data.append(
+                (intensity, np.mean(estimates), np.std(estimates), len(estimates))
+            )
+
+        intensity_data = sorted(intensity_data, key=lambda x: x[0])
+        for arg in intensity_data:
+            intensity, avg_intensity_estimate, intensity_estimate_std, particle_count = arg
+            print(
+                '{}\t{}\t{}\t{}\t{}'.format(
+                    code,
+                    intensity,
+                    avg_intensity_estimate,
+                    intensity_estimate_std,
+                    particle_count,
+                )
+            )
+        print()
