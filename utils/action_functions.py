@@ -175,7 +175,7 @@ def train_region_classifier(
     pipeline_inputs: dict = None,
     load_data_path: str = 'data/classifier_training_samples',
     model_save_path: str = 'data/models/region',
-    val_size: int = 0.20,
+    test_size: float = 0.20,
     cross_validate: bool = False,
     k: int = 5,
     random_state: int = 100,
@@ -198,7 +198,7 @@ def train_region_classifier(
     if pipeline_inputs is not None:
         load_data_path = pipeline_inputs["sample_parent_directory"]
         model_save_path = pipeline_inputs["model_save_parent_directory"]
-        val_size = pipeline_inputs["val_size"]
+        test_size = pipeline_inputs["test_size"]
         cross_validate = pipeline_inputs["strat_kfold"]["activate"]
         k = pipeline_inputs["strat_kfold"]["num_folds"]
         random_state = pipeline_inputs["strat_kfold"]["random_state"]
@@ -230,7 +230,7 @@ def train_region_classifier(
     # Do a stratified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
     training_data, validation_data = train_test_split(
-        dataset, test_size=val_size, stratify=targets
+        dataset, test_size=test_size, stratify=targets
     )
     training_targets = np.asarray(list(zip(*training_data))[-1])
 
