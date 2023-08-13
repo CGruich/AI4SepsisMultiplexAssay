@@ -13,8 +13,7 @@ class RegionDetector(object):
     ):
         self.bbox_threshold = 0.5
         self.desired_region_shape = desired_region_shape
-        self.region_classifier = RegionClassifier(
-            region_shape=(1, *self.desired_region_shape))
+        self.region_classifier = RegionClassifier(region_shape=(1, *self.desired_region_shape))
         if model_load_path is not None:
             self.region_classifier.load_weights(model_load_path)
 
@@ -22,8 +21,7 @@ class RegionDetector(object):
             self.MSER_parameters = (
                 round(MSER_parameters['delta']),
                 round(MSER_parameters['min_area']),
-                round(MSER_parameters['min_area'] +
-                      MSER_parameters['max_area']),
+                round(MSER_parameters['min_area'] + MSER_parameters['max_area']),
                 MSER_parameters['max_variation'],
                 MSER_parameters['min_diversity'],
                 round(MSER_parameters['max_evolution']),
@@ -45,8 +43,7 @@ class RegionDetector(object):
                 162.6,
             )
             # Code_1_Ref1 -- LEGACY
-            self.MSER_parameters = (
-                1, 547, 1881, 1, 0.81046, 717, 794, 0.09432, 39)
+            self.MSER_parameters = (1, 547, 1881, 1, 0.81046, 717, 794, 0.09432, 39)
 
     def detect_regions(self, hologram_image, reference_image, save_img_name=None):
         """
@@ -72,8 +69,7 @@ class RegionDetector(object):
         regions, _ = self.extract_regions(detected_blobs, grayscale_hologram)
 
         # Use a trained classifier to filter regions based on whether they contain an object of interest or not.
-        positive_regions, negative_regions = self.region_classifier.classify_regions(
-            regions)
+        positive_regions, negative_regions = self.region_classifier.classify_regions(regions)
         print(
             'Detected {} positive regions and {} negative regions from {} total detected regions.'.format(
                 len(positive_regions), len(negative_regions), len(regions)
@@ -103,8 +99,7 @@ class RegionDetector(object):
         )
 
         # Get 64x64 bounding boxes around every detected blob.
-        regions, picks = self.extract_regions(
-            detected_blobs, grayscale_hologram)
+        regions, picks = self.extract_regions(detected_blobs, grayscale_hologram)
 
         # Use a trained classifier to filter regions based on whether they contain an object of interest or not.
         (
@@ -224,13 +219,10 @@ class RegionDetector(object):
 
             cv2.polylines(vis, blobs, 1, (0, 65000, 0))
 
-            passed_contours = self.extract_regions(
-                blobs, img, return_passed_contours=True)
-            min_rotated_rects = [cv2.minAreaRect(
-                blob) for blob in passed_contours]
+            passed_contours = self.extract_regions(blobs, img, return_passed_contours=True)
+            min_rotated_rects = [cv2.minAreaRect(blob) for blob in passed_contours]
 
-            rects = [cv2.boxPoints(rect).astype(np.int32)
-                     for rect in min_rotated_rects]
+            rects = [cv2.boxPoints(rect).astype(np.int32) for rect in min_rotated_rects]
             print('detected', len(rects), 'blobs')
             for r in rects:
                 cv2.drawContours(vis, [r], 0, (0, 0, 65000), 2)
