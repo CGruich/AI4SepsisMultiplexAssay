@@ -54,9 +54,8 @@ if __name__ == '__main__':
     elif action == 'train_code_classifier':
         action_functions.train_code_classifier(pipeline_inputs=pipeline_inputs)
 
-    # CG: Deprecated
-    #elif action == 'find_particle_intensities':
-    #    action_functions.find_particle_intensities()
-
+    elif action == 'find_particle_intensities':
+        action_functions.find_particle_intensities()
+        
     else:
         print('invalid action')
