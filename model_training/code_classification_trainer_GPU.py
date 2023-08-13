@@ -507,17 +507,17 @@ class CodeClassifierTrainerGPU(object):
 
         labels = labels.to(torch.int64)
 
-        #print('logits compute_accuracy()')
-        #print(logits)
-        #print('softmax logits compute_accuracy')
+        # print('logits compute_accuracy()')
+        # print(logits)
+        # print('softmax logits compute_accuracy')
         softmax_logits = softmax(logits)
-        #print(softmax_logits)
+        # print(softmax_logits)
 
         predicted_labels = softmax_logits.argmax(dim=-1) + 1
-        #print('predicted_labels compute_accuracy()')
-        #print(predicted_labels)
-        #print('labels compute_accuracy()')
-        #print(labels)
+        # print('predicted_labels compute_accuracy()')
+        # print(predicted_labels)
+        # print('labels compute_accuracy()')
+        # print(labels)
 
         n_samples = labels.shape[0]
 
