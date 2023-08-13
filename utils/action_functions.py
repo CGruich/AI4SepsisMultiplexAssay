@@ -420,7 +420,7 @@ def classify_regions(pipeline_inputs: dict = None):
 def train_code_classifier(
     pipeline_inputs: dict = None,
     load_data_path: str = 'data/classifier_training_samples',
-    model_save_path: str = 'data/models/region',
+    model_save_path: str = 'data/models/code',
     codes: list = None,
     test_size: float = 0.20,
     cross_validate: bool = False,
