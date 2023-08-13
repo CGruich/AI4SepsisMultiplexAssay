@@ -147,7 +147,7 @@ class RegionClassifierTrainerGPU(object):
                 os.path.join(self.model_save_path, self.log_timestamp, 'logs')
             )
 
-    def train(self, cross_validate=False, cross_validation_scores=None):
+    def train(self, cross_validation: bool = False, cross_validation_scores=None):
         """
         Function to train a classifier on hologram regions.
         :return: None.
@@ -280,7 +280,7 @@ class RegionClassifierTrainerGPU(object):
             writer.close()
 
         # If cross-validating, then add the current fold scores to the running cross-validation counts of accuracy and loss
-        if cross_validate:
+        if cross_validation:
             cross_validation_scores['Val_Loss'].append(best_val_loss)
             cross_validation_scores['Val_Acc'].append(self.best_val_acc)
             cross_validation_scores['Test_Loss'].append(self.test_loss_for_best_val)

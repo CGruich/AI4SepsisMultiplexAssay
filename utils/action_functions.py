@@ -189,6 +189,8 @@ def train_region_classifier(
     fc_size: int = 64,
     fc_num: int = 2,
     dropout_rate: float = 0.3,
+    # Only used for Bayesian hyperparameter optimization
+    hyper_dict: dict = None
 ):
 
     # Train a new classifier with the data located under
@@ -252,19 +254,43 @@ def train_region_classifier(
     ):
         if verbose:
             print('\n\nFold {}'.format(fold + 1))
-        # Define a region classifier
-        trainer = RegionClassifierTrainerGPU(
-            model_save_path=model_save_path,
-            save_every_n=save_every_n,
-            batch_size=batch_size,
-            lr=lr,
-            fc_size=fc_size,
-            fc_num=fc_num,
-            dropout_rate=dropout_rate,
-            verbose=verbose,
-            log=log,
-            timestamp=timestamp,
-        )
+        
+        if hyper_dict is None:
+            # Define a region classifier
+            trainer = RegionClassifierTrainerGPU(
+                model_save_path=model_save_path,
+                save_every_n=save_every_n,
+                batch_size=batch_size,
+                lr=lr,
+                fc_size=fc_size,
+                fc_num=fc_num,
+                dropout_rate=dropout_rate,
+                verbose=verbose,
+                log=log,
+                timestamp=timestamp,
+            )
+        # Else, if we are Bayesian optimizing
+        else:
+            # CG: I avoid using .get() here because the hyperparameter dictionary should be strictly and completely specified with values
+            batch_size = hyper_dict['bs']
+            lr = hyper_dict['lr']
+            fc_size = hyper_dict['fc_size']
+            fc_num = hyper_dict['fc_num']
+            dropout_rate = hyper_dict['dr']
+
+            trainer = RegionClassifierTrainerGPU(
+                model_save_path=model_save_path,
+                save_every_n=save_every_n,
+                batch_size=batch_size,
+                lr=lr,
+                fc_size=fc_size,
+                fc_num=fc_num,
+                dropout_rate=dropout_rate,
+                verbose=verbose,
+                log=log,
+                timestamp=timestamp,
+            )
+
         trainer.load_data(
             load_data_path,
             training_data,
@@ -274,7 +300,7 @@ def train_region_classifier(
         )
         # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
         cross_val_scores = trainer.train(
-            cross_validate=cross_validate, cross_validation_scores=cross_val_scores
+            cross_validation=cross_validate, cross_validation_scores=cross_val_scores
         )
         # Keep track of what k-fold we are on for book-keeping
         fold_index = fold_index + 1
@@ -410,6 +436,7 @@ def train_code_classifier(
     fc_size: int = 64,
     fc_num: int = 2,
     dropout_rate: float = 0.3,
+    # Only used for Bayesian hyperparameter optimization
     hyper_dict: dict = None
 ):
 
