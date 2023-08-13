@@ -81,11 +81,13 @@ def generate_grid_search_file(
 
     # Convert to PANDAS dataframe and save
     hpo_trials_df = (
-        pd.DataFrame(hpo_trials, columns=choice_labels).sample(frac=1).reset_index(drop=True)
+        pd.DataFrame(hpo_trials, columns=choice_labels).sample(
+            frac=1).reset_index(drop=True)
     )
     hpo_trials_id = [i for i in range(hpo_trials_df.shape[0])]
     hpo_trials_df.insert(0, 'hpoID', hpo_trials_id)
-    hpo_trials_df.to_csv(osp.join(save_path, 'hpo_trials_region_classifier.csv'), index=False)
+    hpo_trials_df.to_csv(
+        osp.join(save_path, 'hpo_trials_region_classifier.csv'), index=False)
     print(hpo_trials_df)
     return hpo_trials_df
 
