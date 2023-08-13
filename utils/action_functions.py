@@ -196,23 +196,23 @@ def train_region_classifier(
     # data/classifier_training_samples/negative
 
     if pipeline_inputs is not None:
-        load_data_path = pipeline_inputs["sample_parent_directory"]
-        model_save_path = pipeline_inputs["model_save_parent_directory"]
-        test_size = pipeline_inputs["test_size"]
-        cross_validate = pipeline_inputs["strat_kfold"]["activate"]
-        k = pipeline_inputs["strat_kfold"]["num_folds"]
-        random_state = pipeline_inputs["strat_kfold"]["random_state"]
-        verbose = pipeline_inputs["verbose"]
-        log = pipeline_inputs["log"]
-        timestamp = pipeline_inputs["timestamp"]
-        save_every_n = pipeline_inputs["save_every_n"]
+        load_data_path = pipeline_inputs.get("sample_parent_directory")
+        model_save_path = pipeline_inputs.get("model_save_parent_directory")
+        test_size = pipeline_inputs.get("test_size")
+        cross_validate = pipeline_inputs.get("strat_kfold", {}).get("activate")
+        k = pipeline_inputs.get("strat_kfold", {}).get("num_folds")
+        random_state = pipeline_inputs.get("strat_kfold", {}).get("random_state")
+        verbose = pipeline_inputs.get("verbose")
+        log = pipeline_inputs.get("log")
+        timestamp = pipeline_inputs.get("timestamp")
+        save_every_n = pipeline_inputs.get("save_every_n")
 
         # Hyperparameters
-        batch_size = pipeline_inputs["batch_size"]
-        lr = pipeline_inputs["lr"]
-        fc_size = pipeline_inputs["fc_size"]
-        fc_num = pipeline_inputs["fc_num"]
-        dropout_rate = pipeline_inputs["dropout_rate"]
+        batch_size = pipeline_inputs.get("batch_size")
+        lr = pipeline_inputs.get("lr")
+        fc_size = pipeline_inputs.get("fc_size")
+        fc_num = pipeline_inputs.get("fc_num")
+        dropout_rate = pipeline_inputs.get("dropout_rate")
 
     if timestamp is None:
         timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
@@ -392,16 +392,47 @@ def classify_regions(pipeline_inputs: dict = None):
 
 
 def train_code_classifier(
-    pipeline_inputs: dict = None, timestamp: str = None, hyper_dict: dict = None
+    pipeline_inputs: dict = None,
+    load_data_path: str = 'data/classifier_training_samples',
+    model_save_path: str = 'data/models/region',
+    test_size: float = 0.20,
+    cross_validate: bool = False,
+    k: int = 5,
+    random_state: int = 100,
+    verbose: bool = True,
+    log: bool = True,
+    timestamp: str = None,
+    save_every_n: int = 1,
+    # Hyperparameters
+    batch_size: int = 192,
+    lr: float = 3e-4,
+    fc_size: int = 64,
+    fc_num: int = 2,
+    dropout_rate: float = 0.3,
+    hyper_dict: dict = None
 ):
-    assert pipeline_inputs is not None
 
+    if pipeline_inputs is not None:
+        load_data_path = pipeline_inputs.get("sample_parent_directory")
+        model_save_path = pipeline_inputs.get("model_save_parent_directory")
+        test_size = pipeline_inputs.get("test_size")
+        cross_validate = pipeline_inputs.get("strat_kfold", {}).get("activate")
+        k = pipeline_inputs.get("strat_kfold", {}).get("num_folds")
+        random_state = pipeline_inputs.get("strat_kfold", {}).get("random_state")
+        verbose = pipeline_inputs.get("verbose")
+        log = pipeline_inputs.get("log")
+        timestamp = pipeline_inputs.get("timestamp")
+        save_every_n = pipeline_inputs.get("save_every_n")
+
+        # Hyperparameters
+        batch_size = pipeline_inputs.get("batch_size")
+        lr = pipeline_inputs.get("lr")
+        fc_size = pipeline_inputs.get("fc_size")
+        fc_num = pipeline_inputs.get("fc_num")
+        dropout_rate = pipeline_inputs.get("dropout_rate")
+        
     if timestamp is None:
         timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
-
-    # Timestamps for record-keeping
-    if pipeline_inputs['timestamp'] is None:
-        pipeline_inputs['timestamp'] = datetime.now().strftime('%m_%d_%y_%H:%M')
 
     codes = pipeline_inputs['code_list']
     trainer = CodeClassifierTrainerGPU(
@@ -436,81 +467,79 @@ def train_code_classifier(
     training_targets = np.asarray(list(zip(*training_data))[-1])
 
     # CG: Stratified k-Fold cross-validation
-    # If doing strat. k-fold cross-val.,
-    if pipeline_inputs['strat_kfold']['activate']:
-        # Define a class to do the stratified splitting into folds
-        splits = StratifiedKFold(
-            n_splits=pipeline_inputs['strat_kfold']['num_folds'],
-            shuffle=True,
-            random_state=pipeline_inputs['strat_kfold']['random_state'],
-        )
+    # Define a class to do the stratified splitting into folds
+    splits = StratifiedKFold(
+        n_splits=pipeline_inputs['strat_kfold']['num_folds'],
+        shuffle=True,
+        random_state=pipeline_inputs['strat_kfold']['random_state'],
+    )
 
-        # Get the indices of the training dataset
-        training_data_idx = np.arange(len(training_data))
-        # Dictionary to hold cross-validation scores
-        cross_val_scores = {
-            'Val_Loss': [],
-            'Val_Acc': [],
-            'Test_Loss': [],
-            'Test_Acc': [],
-        }
-        fold_index = 1
-        # For each fold in the training dataset, define a new training dataset and validation dataset based off the training targets
-        for fold, (train_idx, val_idx) in enumerate(
-            splits.split(training_data_idx, y=training_targets)
-        ):
-            if pipeline_inputs['verbose']:
-                print('\n\nFold {}'.format(fold + 1))
-            # Define a code classifier
-            # If we are not Bayesian optimizing,
-            if hyper_dict is None:
-                trainer = CodeClassifierTrainerGPU(
-                    codes=codes,
-                    model_save_path=pipeline_inputs['model_save_parent_directory'],
-                    verbose=pipeline_inputs['verbose'],
-                    log=pipeline_inputs['log'],
-                    timestamp=pipeline_inputs['timestamp'],
-                )
-            # Else, if we are Bayesian optimizing,
-            else:
-                trainer = CodeClassifierTrainerGPU(
-                    codes=codes,
-                    model_save_path=pipeline_inputs['model_save_parent_directory'],
-                    batch_size=hyper_dict['bs'],
-                    lr=hyper_dict['lr'],
-                    fc_size=hyper_dict['fc_size'],
-                    fc_num=hyper_dict['fc_num'],
-                    dropout_rate=hyper_dict['dr'],
-                    verbose=pipeline_inputs['verbose'],
-                    log=pipeline_inputs['log'],
-                    timestamp=pipeline_inputs['timestamp'],
-                )
-            # Load code classifier training data and validation data
-            # Validation data is taken from the training dataset and targets (training_data, training_targets)
-            # Test dataset and test targets are inputted separately
-            trainer.load_data(
-                pipeline_inputs['sample_parent_directory'],
-                training_data,
-                training_targets,
-                train_idx,
-                val_idx,
-                test_dataset=validation_data,
-            )
-            # Train
-            cross_val_scores = trainer.train(
-                cross_validation=pipeline_inputs['strat_kfold']['activate'],
-                cross_validation_scores=cross_val_scores,
-            )
-            # Keep track of what k-fold we are on for book-keeping
-            fold_index = fold_index + 1
-
-        # Print out the average cross-validation results
+    # Get the indices of the training dataset
+    training_data_idx = np.arange(len(training_data))
+    # Dictionary to hold cross-validation scores
+    cross_val_scores = {
+        'Val_Loss': [],
+        'Val_Acc': [],
+        'Test_Loss': [],
+        'Test_Acc': [],
+    }
+    fold_index = 1
+    # For each fold in the training dataset, define a new training dataset and validation dataset based off the training targets
+    for fold, (train_idx, val_idx) in enumerate(
+        splits.split(training_data_idx, y=training_targets)
+    ):
         if pipeline_inputs['verbose']:
-            print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
-            print(cross_val_scores)
-            for key, value in cross_val_scores.items():
-                print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
-        return cross_val_scores
+            print('\n\nFold {}'.format(fold + 1))
+        # Define a code classifier
+        # If we are not Bayesian optimizing,
+        if hyper_dict is None:
+            trainer = CodeClassifierTrainerGPU(
+                codes=codes,
+                model_save_path=pipeline_inputs['model_save_parent_directory'],
+                verbose=pipeline_inputs['verbose'],
+                log=pipeline_inputs['log'],
+                timestamp=pipeline_inputs['timestamp'],
+            )
+        # Else, if we are Bayesian optimizing,
+        else:
+            trainer = CodeClassifierTrainerGPU(
+                codes=codes,
+                model_save_path=pipeline_inputs['model_save_parent_directory'],
+                batch_size=hyper_dict['bs'],
+                lr=hyper_dict['lr'],
+                fc_size=hyper_dict['fc_size'],
+                fc_num=hyper_dict['fc_num'],
+                dropout_rate=hyper_dict['dr'],
+                verbose=pipeline_inputs['verbose'],
+                log=pipeline_inputs['log'],
+                timestamp=pipeline_inputs['timestamp'],
+            )
+        # Load code classifier training data and validation data
+        # Validation data is taken from the training dataset and targets (training_data, training_targets)
+        # Test dataset and test targets are inputted separately
+        trainer.load_data(
+            pipeline_inputs['sample_parent_directory'],
+            training_data,
+            training_targets,
+            train_idx,
+            val_idx,
+            test_dataset=validation_data,
+        )
+        # Train
+        cross_val_scores = trainer.train(
+            cross_validation=pipeline_inputs['strat_kfold']['activate'],
+            cross_validation_scores=cross_val_scores,
+        )
+        # Keep track of what k-fold we are on for book-keeping
+        fold_index = fold_index + 1
+
+    # Print out the average cross-validation results
+    if pipeline_inputs['verbose']:
+        print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
+        print(cross_val_scores)
+        for key, value in cross_val_scores.items():
+            print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
+    return cross_val_scores
 
 
 def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
