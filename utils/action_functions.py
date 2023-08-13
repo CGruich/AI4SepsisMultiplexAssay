@@ -395,6 +395,7 @@ def train_code_classifier(
     pipeline_inputs: dict = None,
     load_data_path: str = 'data/classifier_training_samples',
     model_save_path: str = 'data/models/region',
+    codes: list = None,
     test_size: float = 0.20,
     cross_validate: bool = False,
     k: int = 5,
@@ -415,6 +416,7 @@ def train_code_classifier(
     if pipeline_inputs is not None:
         load_data_path = pipeline_inputs.get("sample_parent_directory")
         model_save_path = pipeline_inputs.get("model_save_parent_directory")
+        codes = pipeline_inputs.get("code_list")
         test_size = pipeline_inputs.get("test_size")
         cross_validate = pipeline_inputs.get("strat_kfold", {}).get("activate")
         k = pipeline_inputs.get("strat_kfold", {}).get("num_folds")
@@ -434,20 +436,16 @@ def train_code_classifier(
     if timestamp is None:
         timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
 
-    codes = pipeline_inputs['code_list']
+    assert codes is not None and len(codes) != 0
+
     trainer = CodeClassifierTrainerGPU(
         codes, model_save_path=pipeline_inputs['model_save_parent_directory']
     )
     code_data_composite = []
     for code in codes:
-        code_path = os.path.join(pipeline_inputs['sample_parent_directory'], 'code ' + code)
+        code_path = os.path.join(load_data_path, 'code ' + code)
         code_data = helper_functions.load_code(code_folder_path=code_path)
         code_data_composite = code_data_composite + code_data
-
-    # Total composite dataset samples
-    # Only print verbosely if we are not hyperparameter optimizing
-    if hyper_dict is None:
-        print('Total Composite Dataset Training Samples:\n{}'.format(len(code_data_composite)))
 
     # Based on the format of the return result of helper_functions.load_code(),
     # Extract all the targets of the training samples
@@ -459,9 +457,9 @@ def train_code_classifier(
     # Returns the actual samples, not the indices of the samples.
     training_data, validation_data = train_test_split(
         dataset,
-        test_size=pipeline_inputs['test_size'],
+        test_size=test_size,
         stratify=targets,
-        random_state=pipeline_inputs['strat_kfold']['random_state'],
+        random_state=random_state,
     )
     # Train targets
     training_targets = np.asarray(list(zip(*training_data))[-1])
@@ -469,9 +467,9 @@ def train_code_classifier(
     # CG: Stratified k-Fold cross-validation
     # Define a class to do the stratified splitting into folds
     splits = StratifiedKFold(
-        n_splits=pipeline_inputs['strat_kfold']['num_folds'],
+        n_splits=k,
         shuffle=True,
-        random_state=pipeline_inputs['strat_kfold']['random_state'],
+        random_state=random_state,
     )
 
     # Get the indices of the training dataset
@@ -488,37 +486,51 @@ def train_code_classifier(
     for fold, (train_idx, val_idx) in enumerate(
         splits.split(training_data_idx, y=training_targets)
     ):
-        if pipeline_inputs['verbose']:
+        if verbose:
             print('\n\nFold {}'.format(fold + 1))
         # Define a code classifier
         # If we are not Bayesian optimizing,
         if hyper_dict is None:
             trainer = CodeClassifierTrainerGPU(
                 codes=codes,
-                model_save_path=pipeline_inputs['model_save_parent_directory'],
-                verbose=pipeline_inputs['verbose'],
-                log=pipeline_inputs['log'],
-                timestamp=pipeline_inputs['timestamp'],
+                model_save_path=model_save_path,
+                save_every_n=save_every_n,
+                batch_size=batch_size,
+                lr=lr,
+                fc_size=fc_size,
+                fc_num=fc_num,
+                dropout_rate=dropout_rate,
+                verbose=verbose,
+                log=log,
+                timestamp=timestamp,
             )
         # Else, if we are Bayesian optimizing,
         else:
+            # CG: I avoid using .get() here because the hyperparameter dictionary should be strictly and completely specified with values
+            batch_size = hyper_dict['bs']
+            lr = hyper_dict['lr']
+            fc_size = hyper_dict['fc_size']
+            fc_num = hyper_dict['fc_num']
+            dropout_rate = hyper_dict['dr']
+
             trainer = CodeClassifierTrainerGPU(
                 codes=codes,
-                model_save_path=pipeline_inputs['model_save_parent_directory'],
-                batch_size=hyper_dict['bs'],
-                lr=hyper_dict['lr'],
-                fc_size=hyper_dict['fc_size'],
-                fc_num=hyper_dict['fc_num'],
-                dropout_rate=hyper_dict['dr'],
-                verbose=pipeline_inputs['verbose'],
-                log=pipeline_inputs['log'],
-                timestamp=pipeline_inputs['timestamp'],
+                model_save_path=model_save_path,
+                save_every_n=save_every_n,
+                batch_size=batch_size,
+                lr=lr,
+                fc_size=fc_size,
+                fc_num=fc_num,
+                dropout_rate=dropout_rate,
+                verbose=verbose,
+                log=log,
+                timestamp=timestamp,
             )
         # Load code classifier training data and validation data
         # Validation data is taken from the training dataset and targets (training_data, training_targets)
         # Test dataset and test targets are inputted separately
         trainer.load_data(
-            pipeline_inputs['sample_parent_directory'],
+            load_data_path,
             training_data,
             training_targets,
             train_idx,
@@ -527,7 +539,7 @@ def train_code_classifier(
         )
         # Train
         cross_val_scores = trainer.train(
-            cross_validation=pipeline_inputs['strat_kfold']['activate'],
+            cross_validation=cross_validate,
             cross_validation_scores=cross_val_scores,
         )
         # Keep track of what k-fold we are on for book-keeping
