@@ -479,7 +479,6 @@ class RegionClassifierTrainerGPU(object):
 
     def load_data(
         self,
-        folder_path: str,
         train_dataset_np=None,
         train_targets_np=None,
         train_idx=None,

@@ -231,7 +231,7 @@ def train_region_classifier(
 
     # Do a stratified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
-    training_data, validation_data = train_test_split(
+    training_data, test_data = train_test_split(
         dataset, test_size=test_size, stratify=targets
     )
     training_targets = np.asarray(list(zip(*training_data))[-1])
@@ -296,7 +296,7 @@ def train_region_classifier(
             training_data,
             train_idx,
             val_idx,
-            test_dataset=validation_data,
+            test_dataset=test_data,
         )
         # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
         cross_val_scores = trainer.train(
@@ -482,7 +482,7 @@ def train_code_classifier(
 
     # Do a straified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
-    training_data, validation_data = train_test_split(
+    training_data, test_data = train_test_split(
         dataset,
         test_size=test_size,
         stratify=targets,
@@ -557,12 +557,11 @@ def train_code_classifier(
         # Validation data is taken from the training dataset and targets (training_data, training_targets)
         # Test dataset and test targets are inputted separately
         trainer.load_data(
-            load_data_path,
             training_data,
             training_targets,
             train_idx,
             val_idx,
-            test_dataset=validation_data,
+            test_dataset=test_data,
         )
         # Train
         cross_val_scores = trainer.train(
