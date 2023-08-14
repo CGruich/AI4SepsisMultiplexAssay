@@ -247,10 +247,10 @@ class RegionClassifierTrainerGPU(object):
 
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:
-                if self.verbose:
-                    print('NEW BEST VAL. ACCURACY', val_acc, epoch)
                 self.best_val_acc = val_acc
                 self.test_acc_for_best_val = test_acc
+                if self.verbose:
+                    print(f'(New Best Val. Acc., Correspond. Test Acc., Epoch):\n({self.best_val_acc}, {self.test_acc_for_best_val}, {epoch})\n')
                 self.save_model(epoch)
 
             # If our new loss is best,

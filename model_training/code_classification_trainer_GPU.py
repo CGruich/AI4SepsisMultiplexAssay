@@ -276,10 +276,10 @@ class CodeClassifierTrainerGPU(object):
 
             # If enough epochs have passed that we need to save the model, do so.
             if val_acc > self.best_val_acc:
-                if self.verbose:
-                    print('NEW BEST VAL. ACCURACY', val_acc, epoch)
                 self.best_val_acc = val_acc
                 self.test_acc_for_best_val = test_acc
+                if self.verbose:
+                    print(f'(New Best Val. Acc., Correspond. Test Acc., Epoch):\n({self.best_val_acc}, {self.test_acc_for_best_val}, {epoch})\n')
                 self.save_model(epoch)
 
             # If our new loss is best,
@@ -454,8 +454,8 @@ class CodeClassifierTrainerGPU(object):
         # CrossEntropyLoss() accepts unnormalized prediction logits
         loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
-        print('Val Acc:')
-        print(acc)
+        #print('Val Acc:')
+        #print(acc)
 
         # Set the model back to training mode.
         self.model.train()
@@ -487,8 +487,8 @@ class CodeClassifierTrainerGPU(object):
         # CrossEntropyLoss() accepts unnormalized prediction logits
         loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
-        print('Test Acc:')
-        print(acc)
+        #print('Test Acc:')
+        #print(acc)
 
         # Set the model back to training mode.
         self.model.train()
