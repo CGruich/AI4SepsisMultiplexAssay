@@ -216,7 +216,7 @@ class RegionClassifierTrainerGPU(object):
                 #print(labels)
                 #print(type(labels))
                 #print(labels.size())
-                loss = loss_fn(predictions[:, 1:2], labels)
+                loss = loss_fn(predictions[:, 1:2].to(torch.float32), labels.to(torch.float32))
 
                 loss.backward()
                 optimizer.step()
@@ -401,7 +401,7 @@ class RegionClassifierTrainerGPU(object):
                     activate=self.debug,
                 )
 
-            labels = torch.as_tensor(np.array(labels, dtype=np.int32), dtype=torch.float32).unsqueeze(dim=-1)
+            labels = torch.as_tensor(np.array(labels, dtype=np.float32), dtype=torch.float32).unsqueeze(dim=-1)
 
             # CG: Enable if not work
             # print("Augmented samples")
@@ -441,7 +441,7 @@ class RegionClassifierTrainerGPU(object):
         #print(labels)
         #print(type(labels))
         #print(labels.size())
-        loss = self.loss_fn(predictions[:, 1:2], labels).item()
+        loss = self.loss_fn(predictions[:, 1:2].to(torch.float32), labels.to(torch.float32)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
 
         # Set the model back to training mode.
@@ -471,7 +471,7 @@ class RegionClassifierTrainerGPU(object):
 
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
-        loss = self.loss_fn(predictions[:, 1:2], labels).item()
+        loss = self.loss_fn(predictions[:, 1:2].to(torch.float32), labels.to(torch.float32)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
 
         # Set the model back to training mode.
@@ -534,7 +534,7 @@ class RegionClassifierTrainerGPU(object):
             v_labels.append(label)
             v_regions.append(np.array(region[0][0], dtype=np.float32))
 
-        v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.float32).unsqueeze(dim=-1)
+        v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.int32).unsqueeze(dim=-1)
         v_regions = torch.as_tensor(np.array(v_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(
@@ -552,7 +552,7 @@ class RegionClassifierTrainerGPU(object):
         for region, label in zip(test_dataset, train_targets):
             t_labels.append(label)
             t_regions.append(np.array(region[0][0], dtype=np.float32))
-        t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.float32).unsqueeze(dim=-1)
+        t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.int32).unsqueeze(dim=-1)
         t_regions = torch.as_tensor(np.array(t_regions, dtype=np.int32), dtype=torch.float32)
 
         print_images(

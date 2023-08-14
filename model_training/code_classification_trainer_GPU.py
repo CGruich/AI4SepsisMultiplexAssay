@@ -226,7 +226,7 @@ class CodeClassifierTrainerGPU(object):
                 # print('LABELS IN TRAINING LOOP')
                 # print(labels)
                 # print(type(labels))
-                loss = loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64))
+                loss = loss_fn(predictions.to(torch.float32), (labels - 1).to(torch.int32))
 
                 loss.backward()
                 optimizer.step()
@@ -452,7 +452,7 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         # CrossEntropyLoss() accepts unnormalized prediction logits
-        loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
+        loss = self.loss_fn(predictions, (labels - 1)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
         #print('Val Acc:')
         #print(acc)
@@ -485,7 +485,7 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         # CrossEntropyLoss() accepts unnormalized prediction logits
-        loss = self.loss_fn(predictions.to(torch.float64), (labels - 1).to(torch.int64)).item()
+        loss = self.loss_fn(predictions, (labels - 1)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
         #print('Test Acc:')
         #print(acc)
