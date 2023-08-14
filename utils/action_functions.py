@@ -224,8 +224,6 @@ def train_region_classifier(
     # Based on the format of the return result of .load_data(),
     # Extract all the targets of the training samples
     targets = np.array(list(zip(*data_list))[-1])
-    print("targets")
-    print(targets)
     # All the samples
     dataset = np.asarray(
         helper_functions.load_data(load_data_path, verbose=verbose), dtype=object

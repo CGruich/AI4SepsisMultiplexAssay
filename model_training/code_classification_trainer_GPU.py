@@ -226,7 +226,7 @@ class CodeClassifierTrainerGPU(object):
                 # print('LABELS IN TRAINING LOOP')
                 # print(labels)
                 # print(type(labels))
-                loss = loss_fn(predictions.to(torch.float32), (labels - 1).to(torch.int32))
+                loss = loss_fn(predictions.to(torch.float32), (labels - 1).to(torch.long))
 
                 loss.backward()
                 optimizer.step()
@@ -383,7 +383,7 @@ class CodeClassifierTrainerGPU(object):
 
                 # Cast batch to tensor for PyTorch.
                 samples = torch.as_tensor(
-                    np.array(samples, dtype=np.int32), dtype=torch.float32
+                    np.array(samples, dtype=np.int32), dtype=torch.float
                 )
                 # print("Samples after random rotation")
                 # print(samples)
@@ -452,7 +452,7 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         # CrossEntropyLoss() accepts unnormalized prediction logits
-        loss = self.loss_fn(predictions, (labels - 1)).item()
+        loss = self.loss_fn(predictions, (labels - 1).to(torch.long)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
         #print('Val Acc:')
         #print(acc)
@@ -485,7 +485,7 @@ class CodeClassifierTrainerGPU(object):
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
         # CrossEntropyLoss() accepts unnormalized prediction logits
-        loss = self.loss_fn(predictions, (labels - 1)).item()
+        loss = self.loss_fn(predictions, (labels - 1).to(torch.long)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
         #print('Test Acc:')
         #print(acc)

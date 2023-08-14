@@ -54,7 +54,7 @@ def objective_region_classifier(trial, pipeline_inputs: dict = None):
 
     # Run stratified k-fold cross-validation with the hyperparameters
     # Via the pipeline functionality of the workflow,
-    cross_val_scores = action_functions.train_code_classifier(
+    cross_val_scores = action_functions.train_region_classifier(
         pipeline_inputs=pipeline_inputs, timestamp=None, hyper_dict=hyper_dict
     )
 
