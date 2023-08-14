@@ -98,7 +98,12 @@ class RegionClassifierTrainerGPU(object):
         self.learning_rate = lr
         # Keep track of the best validation accuracy
         self.best_val_acc = 0
-
+        # When early-stopping based on some loss
+        # We often want to early-stop based on some finite precision.
+        # In other words, if the loss improves by 10^-6, this is not real improvement for practical purposes
+        # Here, we define a minimum amount of improvement for the loss function
+        self.early_stop_delta = 0.1
+        
         self.test_loss_for_best_val = None
         self.test_acc_for_best_val = 0
 
