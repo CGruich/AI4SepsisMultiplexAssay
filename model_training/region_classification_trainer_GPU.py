@@ -489,12 +489,29 @@ class RegionClassifierTrainerGPU(object):
         :return: Computed accuracy.
         """
 
+        labels=labels.squeeze(dim=-1).to(torch.int32)
+
         predicted_labels = predictions.argmax(dim=-1)
-        known_labels = labels.argmax(dim=-1)
         n_samples = labels.shape[0]
 
-        diff = (predicted_labels - known_labels).abs().sum()
-        acc = 100 * (n_samples - diff) / n_samples
+        #diff = (predicted_labels - known_labels).abs().sum()
+        #acc = 100 * (n_samples - diff) / n_samples
+
+        n_correct = torch.where(predicted_labels == labels, 1, 0).sum()
+
+        acc = 100 * n_correct / n_samples
+
+        #print("predicted_labels")
+        #print(predicted_labels)
+        #print("labels")
+        #print(labels)
+        #print("n_samples")
+        #print(n_samples)
+        #print("n_correct")
+        #print(n_correct)
+        #print("acc")
+        #print(acc)
+
         return acc.item()
 
     def load_data(
