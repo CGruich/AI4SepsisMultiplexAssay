@@ -497,7 +497,7 @@ class CodeClassifierTrainerGPU(object):
         return loss, acc
 
     @torch.no_grad()
-    def compute_accuracy(self, labels, logits, softmax=nn.Softmax()):
+    def compute_accuracy(self, labels, logits, softmax=nn.Softmax(dim=1)):
         """
         Function to compute the accuracy of a batch of predictions given a batch of labels.
         :param labels: Ground-truth labels to compare to.
@@ -507,17 +507,17 @@ class CodeClassifierTrainerGPU(object):
 
         labels = labels.to(torch.int64)
 
-        # print('logits compute_accuracy()')
-        # print(logits)
-        # print('softmax logits compute_accuracy')
+        #print('logits compute_accuracy()')
+        #print(logits)
+        #print('softmax logits compute_accuracy')
         softmax_logits = softmax(logits)
-        # print(softmax_logits)
+        #print(softmax_logits)
 
-        predicted_labels = softmax_logits.argmax(dim=-1) + 1
-        # print('predicted_labels compute_accuracy()')
-        # print(predicted_labels)
-        # print('labels compute_accuracy()')
-        # print(labels)
+        predicted_labels = softmax_logits.argmax(dim=1) + 1
+        #print('predicted_labels compute_accuracy()')
+        #print(predicted_labels)
+        #print('labels compute_accuracy()')
+        #print(labels)
 
         n_samples = labels.shape[0]
 

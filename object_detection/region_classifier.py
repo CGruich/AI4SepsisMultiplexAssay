@@ -76,9 +76,6 @@ class RegionClassifier(nn.Module):
             # Dropout layer to prevent overfitting
             self.fc_layers.append(nn.Dropout(p=dropout_rate))
             self.fc_layers.append(nn.Softmax(dim=-1))
-            # Not compatible with cross-entropy loss function, as cross-entropy loss applies softmax internally
-            # For now, this is commented out. In production outside of model training, this can be uncommented and used.
-            # nn.Softmax(dim=-1)
         # Else if only one fully connected layer to add
         else:
             self.fc_layers.append(nn.BatchNorm1d(h1))

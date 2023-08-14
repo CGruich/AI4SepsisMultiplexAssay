@@ -596,7 +596,7 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
         study,
         objective_with_custom_input,
         num_trials=pipeline_inputs['num_hpo'],
-        checkpoint_every=pipeline_inputs['save_every'],
+        checkpoint_every=pipeline_inputs['save_every_n'],
         checkpoint_path=os.path.join(
             pipeline_inputs['checkpoint_path'], pipeline_inputs['timestamp']
         ),
@@ -644,7 +644,7 @@ def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
         study,
         objective_with_custom_input,
         num_trials=pipeline_inputs['num_hpo'],
-        checkpoint_every=pipeline_inputs['save_every'],
+        checkpoint_every=pipeline_inputs['save_every_n'],
         checkpoint_path=os.path.join(
             pipeline_inputs['checkpoint_path'], pipeline_inputs['timestamp']
         ),
