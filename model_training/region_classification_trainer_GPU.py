@@ -209,13 +209,13 @@ class RegionClassifierTrainerGPU(object):
 
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
-                print(predictions)
-                print(type(predictions))
-                print(predictions.size())
-                print(predictions[:, 1:2])
-                print(labels)
-                print(type(labels))
-                print(labels.size())
+                #print(predictions)
+                #print(type(predictions))
+                #print(predictions.size())
+                #print(predictions[:, 1:2])
+                #print(labels)
+                #print(type(labels))
+                #print(labels.size())
                 loss = loss_fn(predictions[:, 1:2], labels)
 
                 loss.backward()
@@ -434,13 +434,13 @@ class RegionClassifierTrainerGPU(object):
 
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
-        print(predictions)
-        print(type(predictions))
-        print(predictions.size())
-        print(predictions[:, 1:2])
-        print(labels)
-        print(type(labels))
-        print(labels.size())
+        #print(predictions)
+        #print(type(predictions))
+        #print(predictions.size())
+        #print(predictions[:, 1:2])
+        #print(labels)
+        #print(type(labels))
+        #print(labels.size())
         loss = self.loss_fn(predictions[:, 1:2], labels).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
 
@@ -524,8 +524,8 @@ class RegionClassifierTrainerGPU(object):
         val_data = np.take(train_dataset_np, val_idx, axis=0)
         val_targets = np.take(train_targets_np, val_idx, axis=0)
 
-        print("train_targets in model.load_data")
-        print(train_targets)
+        #print("train_targets in model.load_data")
+        #print(train_targets)
 
         # Setting up validation dataset
         v_labels = []
