@@ -21,7 +21,7 @@ class RegionDetector(object):
             self.MSER_parameters = (
                 round(MSER_parameters['delta']),
                 round(MSER_parameters['min_area']),
-                round(MSER_parameters['min_area'] + MSER_parameters['max_area']),
+                round(MSER_parameters['max_area']),
                 MSER_parameters['max_variation'],
                 MSER_parameters['min_diversity'],
                 round(MSER_parameters['max_evolution']),
@@ -32,18 +32,16 @@ class RegionDetector(object):
         else:
             # Determined from 13 images of Code 1 particles.
             self.MSER_parameters = (
-                7.284,
-                1112,
-                7990,
-                0.3684,
-                0.8674,
-                645.4,
-                55.92,
-                0.4834,
-                162.6,
+                4.980,
+                1628,
+                8564,
+                0.5546,
+                0.2212,
+                78.93,
+                44.81,
+                0.9392,
+                825.1,
             )
-            # Code_1_Ref1 -- LEGACY
-            self.MSER_parameters = (1, 547, 1881, 1, 0.81046, 717, 794, 0.09432, 39)
 
     def detect_regions(self, hologram_image, reference_image, draw_blobs: bool = False, save_img_name=None):
         """
