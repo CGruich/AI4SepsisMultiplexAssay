@@ -45,13 +45,14 @@ class RegionDetector(object):
             # Code_1_Ref1 -- LEGACY
             self.MSER_parameters = (1, 547, 1881, 1, 0.81046, 717, 794, 0.09432, 39)
 
-    def detect_regions(self, hologram_image, reference_image, save_img_name=None):
+    def detect_regions(self, hologram_image, reference_image, draw_blobs: bool = False, save_img_name=None):
         """
         Function to detect blobs in a hologram, construct bounding boxes around them, and use a trained classification
         model to filter out regions that do not contain objects of interest.
         :param hologram_image: Hologram to detect objects in.
         :param reference_image: Reference image with which to normalize the hologram.
         :param save_img_name: For debugging blob detection, an image with this name will be saved with MSER blobs drawn on it.
+        :param draw_blobs: whether to draw MSER blobs at all and save to save_img_name
         :return: A list containing every region that an object was detected in.
         """
 
@@ -61,7 +62,7 @@ class RegionDetector(object):
         # Pass our newly normalized image to MSER for blob detection.
         detected_blobs, _ = self.mser_detect_blobs(
             grayscale_hologram,
-            draw_blobs=save_img_name is not None,
+            draw_blobs=draw_blobs,
             save_img_name=save_img_name,
         )
 
@@ -205,6 +206,12 @@ class RegionDetector(object):
                 blobs_to_keep.append(blobs[i])
 
         blobs = blobs_to_keep
+        passed_contours = self.extract_regions(blobs, img, return_passed_contours=True)
+        min_rotated_rects = [cv2.minAreaRect(blob) for blob in passed_contours]
+
+        rects = [cv2.boxPoints(rect).astype(np.int32) for rect in min_rotated_rects]
+        print('detected', len(rects), 'blobs')
+
         # Optionally draw the hulls on a display image.
         if draw_blobs:
             # Copy of input hologram for display purposes.
@@ -219,26 +226,20 @@ class RegionDetector(object):
 
             cv2.polylines(vis, blobs, 1, (0, 65000, 0))
 
-            passed_contours = self.extract_regions(blobs, img, return_passed_contours=True)
-            min_rotated_rects = [cv2.minAreaRect(blob) for blob in passed_contours]
-
-            rects = [cv2.boxPoints(rect).astype(np.int32) for rect in min_rotated_rects]
-            print('detected', len(rects), 'blobs')
             for r in rects:
                 cv2.drawContours(vis, [r], 0, (0, 0, 65000), 2)
 
-            cv2.namedWindow('vis')
-            cv2.imshow('vis', cv2.resize(vis, (1920, 1080)))
-            cv2.moveWindow('vis', 0, 0)
+            cv2.namedWindow('Detected Regions (Press Enter to exit...)')
+            cv2.imshow('Detected Regions (Press Enter to exit...)', cv2.resize(vis, (1920, 1080)))
+            cv2.moveWindow('Detected Regions (Press Enter to exit...)', 0, 0)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
             if save_img_name is None:
                 save_img_name = 'data/test/MSER Hulls.png'
             cv2.imwrite(save_img_name, vis)
-
-            return blobs, rects
-        return blobs
+            
+        return blobs, rects
 
     def extract_regions(self, blobs, grayscale_hologram, return_passed_contours=False):
         """

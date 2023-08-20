@@ -318,8 +318,14 @@ def classify_regions(pipeline_inputs: dict = None):
 
     # Get the parent directory of raw images for all codes
     raw_directory = pipeline_inputs['raw_directory']
+    # Get the parent directory to save visual representation of all regions detected by MSER
+    hull_directory = pipeline_inputs['hull_directory']
+    # Indicates if we draw rectangles around stable regions of particles/not-particles found by MSER and save to hull_directory
+    draw_blobs = pipeline_inputs['draw_blobs']
+
     # Get the list of codes to process from the control panel pipeline inputs
     code_list = pipeline_inputs['code_list']
+
     # For each code to process
     for code_num in tqdm(code_list):
         # Get the raw image directory for that code
@@ -337,83 +343,91 @@ def classify_regions(pipeline_inputs: dict = None):
         print(f'Processing and saving data to:\n{pos_save_dir}')
         print(f'Processing and saving data to:\n{neg_save_dir}')
 
-        filenames = sorted(os.listdir(raw_code_dir))
-
         # Load MSER parameters for an initial division of positive/negative samples
+        # This should be a list parallel with the ordering of images (1.tiff, 2.tiff, etc.)
+        # Each entry in the list is the filename of the MSER parameters to be used on that particular image
+        # (e.g., entry 0 in the list refers to MSER parameters used for 1.tiff, entry 1 refers to 2.tiff, etc.)
         MSER_params = pipeline_inputs['MSER_params_per_code'][code_num]
-        # For each set of MSER parameters, which corresponds to each reference image of each code,
-        for MSERFile in tqdm(MSER_params):
+
+        # We'll store the final processed images to be fed to the region classifier in this list
+        grayscale_holograms = []
+        
+        # We are using a region detector with an assumed flexibility to switch out the MSER params per raw image of barcoded particles
+        # In reality, we are using one set of MSER parameters for each code to bootstrap training samples for all raw images of barcoded particles for a code
+        # Nevertheless, we keep this flexibility here by storing separate copies of the region detector in a list, parallel with 'MSER_params' list
+        region_detectors = []
+
+        # For each raw image for a particular code,
+        for MSER_index in range(len(MSER_params)):
             # These counters for positive/negative samples are counted per-reference image, not per-code
             sum_pos = 0
             sum_neg = 0
-            raw_image_id = MSERFile.rstrip('_MSER.json')
-            with open(os.path.join(raw_code_dir, MSERFile), 'r') as MSERObj:
+            raw_image_id = str(MSER_index + 1)
+            with open(os.path.join(raw_code_dir, MSER_params[MSER_index]), 'r') as MSERObj:
                 mser_dict = dict(json.load(MSERObj)['optimizer.max']['params'])
             # Define a region detector for positive/negative division of samples
             # This region detector is not optimized to be the most accurate
             # Rather, we use the region detector as a means of initializing positive/negative samples.
             # Later, we will actually hyperparameter optimize the region detectors for accurate positive/negative sample separation
             region_detector = RegionDetector(MSER_parameters=mser_dict)
-            # For each reference image in the raw image directory for a particular code,
-            ref_name = raw_image_id + '_ref.tiff'
+            region_detectors.append(region_detector)
 
-            holograms = []
-            # Ignore the file if it is not an image file
-            if '.tiff' not in ref_name:
-                continue
-            # If the file is a reference image,
-            elif 'ref' in ref_name:
-                # Load reference
-                reference = cv2.imread(
-                    os.path.join(raw_code_dir, ref_name), cv2.IMREAD_ANYDEPTH
+            image_name = raw_image_id + ".tiff"
+            reference_name = raw_image_id + "_ref.tiff"
+
+            # Read the raw code image
+            hologram = cv2.imread(
+                '{}/{}'.format(raw_code_dir, image_name), cv2.IMREAD_ANYDEPTH,
+            )
+
+            # Read the reference image
+            reference = cv2.imread(
+                '{}/{}'.format(raw_code_dir, reference_name), cv2.IMREAD_ANYDEPTH,
+            )
+
+            # Normalize the raw code image by the reference image for robustness
+            # to lighting conditions/noise/etc.
+            grayscale_hologram = helper_functions.normalize_by_reference(
+                hologram, reference)
+            
+            grayscale_hologram = grayscale_hologram.astype(np.float32)
+            # Append the raw image data with the reference image data.
+            grayscale_holograms.append(
+                (hologram, raw_image_id, reference)
+            )
+
+        # For each normalized image representing a collection of barcoded particles, along with its' corresponding MSER parameter-loaded region detector,
+        for hologram, region_detector in tqdm(zip(grayscale_holograms, region_detectors)):
+            holo, raw_image_id, reference = hologram
+            save_img_file = '{}_{}_regions.png'.format(code_num, raw_image_id)
+            save_img_name = os.path.join(hull_directory, f'code {code_num}')
+            os.makedirs(save_img_name, exist_ok=True)
+            save_img_name = os.path.join(save_img_name, save_img_file)
+
+            (positive_regions, negative_regions,) = region_detector.detect_regions(
+                holo, reference, draw_blobs=draw_blobs, save_img_name=save_img_name
+            )
+            for i in range(len(positive_regions)):
+                file_path = '{}/{}_{}_positive_{}.png'.format(
+                    pos_save_dir, code_num, raw_image_id, i + sum_pos
                 )
-                # For each image in the raw image directory of a particular code
-                for image_name in filenames:
-                    # The raw image file is just the name of the reference file without the reference designation
-                    code = ref_name.replace('_ref.tiff', "")
-                    # If we found the code image that corresponds with its' own refernece image,
-                    if (
-                        code == image_name.replace('.tiff', "").split('_')[0]
-                        and '.tiff' in image_name
-                        and 'ref' not in image_name
-                    ):
-                        # Read the raw code image
-                        hologram = cv2.imread(
-                            '{}/{}'.format(raw_code_dir, image_name), cv2.IMREAD_ANYDEPTH,
-                        )
-                        hologram = hologram.astype(np.float32)
-                        # Append the raw image data with the reference image data.
-                        holograms.append(
-                            (hologram, image_name.replace('.tiff', ""), reference)
-                        )
+                region = positive_regions[i]
+                shape = region.shape
+                new_shape = (*shape[1:], shape[0])
+                region = region.reshape(new_shape)
+                cv2.imwrite(file_path, region)
+            sum_pos = sum_pos + len(positive_regions)
 
-                for hologram in holograms:
-                    holo, name, reference = hologram
-                    save_img_name = 'data/test/{}_{}_regions.png'.format(code_num, name)
-                    (positive_regions, negative_regions,) = region_detector.detect_regions(
-                        holo, reference, save_img_name=save_img_name
-                    )
-                    for i in range(len(positive_regions)):
-                        file_path = '{}/{}_{}_positive_{}.png'.format(
-                            pos_save_dir, code_num, raw_image_id, i + sum_pos
-                        )
-                        region = positive_regions[i]
-                        shape = region.shape
-                        new_shape = (*shape[1:], shape[0])
-                        region = region.reshape(new_shape)
-                        cv2.imwrite(file_path, region)
-                    sum_pos = sum_pos + len(positive_regions)
-
-                    for i in range(len(negative_regions)):
-                        file_path = '{}/{}_{}_negative_{}.png'.format(
-                            neg_save_dir, code_num, raw_image_id, i + sum_neg
-                        )
-                        region = negative_regions[i]
-                        shape = region.shape
-                        new_shape = (*shape[1:], shape[0])
-                        region = region.reshape(new_shape)
-                        cv2.imwrite(file_path, region)
-                    sum_neg = sum_neg + len(negative_regions)
+            for i in range(len(negative_regions)):
+                file_path = '{}/{}_{}_negative_{}.png'.format(
+                    neg_save_dir, code_num, raw_image_id, i + sum_neg
+                )
+                region = negative_regions[i]
+                shape = region.shape
+                new_shape = (*shape[1:], shape[0])
+                region = region.reshape(new_shape)
+                cv2.imwrite(file_path, region)
+            sum_neg = sum_neg + len(negative_regions)
 
 
 def train_code_classifier(
