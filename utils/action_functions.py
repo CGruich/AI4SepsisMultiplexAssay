@@ -221,12 +221,13 @@ def train_region_classifier(
 
     # Returns list of lists
     data_list = helper_functions.load_data(load_data_path, verbose=verbose)
+
     # Based on the format of the return result of .load_data(),
     # Extract all the targets of the training samples
     targets = np.array(list(zip(*data_list))[-1])
     # All the samples
     dataset = np.asarray(
-        helper_functions.load_data(load_data_path, verbose=verbose), dtype=object
+        data_list, dtype=object
     )
 
     # Do a stratified train/test split of all samples into training and test datasets

@@ -47,7 +47,7 @@ class CodeClassifierTrainerGPU(object):
         timestamp: str = datetime.now().strftime('%m_%d_%y_%H:%M'),
     ):
         # Prints out augmented images if set to true
-        self.debug = True
+        self.debug = False
 
         # Printing verbosity
         self.verbose = verbose
@@ -355,11 +355,11 @@ class CodeClassifierTrainerGPU(object):
                 labels.append(label)
 
             # Cast batch to tensor for PyTorch.
-            samples = torch.as_tensor(np.array(samples, dtype=np.int32), dtype=torch.float32)
+            samples = torch.as_tensor(np.array(samples, dtype=np.float32), dtype=torch.float32)
             # print("Samples before Augmentation")
             # print(samples)
             print_images(
-                samples/255,
+                samples/65535,
                 path='data/classifier_training_samples/Data_Augmentation_Inspection/NoAugment',
                 batch_id=str(i),
                 activate=self.debug,
@@ -383,12 +383,12 @@ class CodeClassifierTrainerGPU(object):
 
                 # Cast batch to tensor for PyTorch.
                 samples = torch.as_tensor(
-                    np.array(samples, dtype=np.int32), dtype=torch.float
+                    np.array(samples, dtype=np.float32), dtype=torch.float
                 )
                 # print("Samples after random rotation")
                 # print(samples)
                 print_images(
-                    samples/255,
+                    samples/65535,
                     path='data/classifier_training_samples/Data_Augmentation_Inspection/Rotations',
                     batch_id=str(i),
                     activate=self.debug,
@@ -400,7 +400,7 @@ class CodeClassifierTrainerGPU(object):
                 # print("Samples after random horizontal flip")
                 # print(samples)
                 print_images(
-                    samples/255,
+                    samples/65535,
                     path='data/classifier_training_samples/Data_Augmentation_Inspection/HorizontalFlip',
                     batch_id=str(i),
                     activate=self.debug,
@@ -412,7 +412,7 @@ class CodeClassifierTrainerGPU(object):
                 # print("Samples after random vertical flip")
                 # print(samples)
                 print_images(
-                    samples/255,
+                    samples/65535,
                     path='data/classifier_training_samples/Data_Augmentation_Inspection/VerticalFlip',
                     batch_id=str(i),
                     activate=self.debug,
@@ -559,14 +559,14 @@ class CodeClassifierTrainerGPU(object):
         v_regions = []
         for region, label in zip(val_data, val_targets):
             v_labels.append(label)
-            v_regions.append(np.array(region[0][0], dtype=np.int32))
+            v_regions.append(np.array(region[0][0], dtype=np.float32))
         v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.int32)
         # print('VALIDATION_LABELS')
         # print(v_labels)
-        v_regions = torch.as_tensor(np.array(v_regions, dtype=np.int32), dtype=torch.float32)
+        v_regions = torch.as_tensor(np.array(v_regions), dtype=torch.float32)
 
         print_images(
-            v_regions/255,
+            v_regions/65535,
             path='data/classifier_training_samples/Validation_Dataset/',
             batch_id='val',
             activate=self.debug,
@@ -579,14 +579,14 @@ class CodeClassifierTrainerGPU(object):
         t_regions = []
         for region, label in zip(test_dataset, train_targets):
             t_labels.append(label)
-            t_regions.append(np.array(region[0][0], dtype=np.int32))
+            t_regions.append(np.array(region[0][0], dtype=np.float32))
         t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.int32)
         # print('TEST LABELS')
         # print(v_labels)
-        t_regions = torch.as_tensor(np.array(t_regions, dtype=np.int32), dtype=torch.float32)
+        t_regions = torch.as_tensor(np.array(t_regions), dtype=torch.float32)
 
         print_images(
-            t_regions/255,
+            t_regions/65535,
             path='data/classifier_training_samples/Test_Dataset/',
             batch_id='test',
             activate=self.debug,

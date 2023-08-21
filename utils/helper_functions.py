@@ -193,6 +193,7 @@ def load_data(folder_path, verbose=True):
         region = cv2.imread(
             os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
         )
+
         label = 1
 
         # Append region and positive label to dataset.
@@ -384,3 +385,12 @@ def load_and_normalize(raw_directory, code_list, color=False, one_ref_per_img=Tr
             grayscales.append(grayscale_hologram)
 
         return grayscales, particle_locations
+
+def visualize_image(image_array: np.ndarray, scale: tuple = None):
+
+    cv2.namedWindow('Image Preview Debug (Press Enter to exit...)')
+    cv2.imshow('Image Preview Debug (Press Enter to exit...)', cv2.resize(image_array, scale))
+    cv2.moveWindow('Image Preview Debug (Press Enter to exit...)', 0, 0)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    cv2.imshow('Image', image_array)
