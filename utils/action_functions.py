@@ -21,65 +21,6 @@ from . import (
 import optuna
 from optuna.trial import TrialState
 
-# CG: Leaving here for now temporarily, in case needed
-# Probably warrants deprecation.
-"""def get_intensity(
-    img_folder='/Users/apple/Dropbox (University of Michigan)/iMAPS_coding/Selected images for DL/1-1/1-10 (1)',
-    region_detector_path='data/best/best_region_classifier.pt',
-):
-    region_detector = RegionDetector(model_load_path=region_detector_path)
-    folder_name = img_folder[img_folder.rfind('/') + 1 :]
-    holograms = []
-
-    for ref_name in os.listdir(img_folder):
-        if '.tiff' not in ref_name:
-            continue
-        if 'ref' in ref_name:
-            print('referencing: ', ref_name)
-            reference = cv2.imread('{}/{}'.format(img_folder, ref_name), cv2.IMREAD_ANYDEPTH)
-
-            for image_name in os.listdir(img_folder):
-                code = ref_name.replace('_ref.tiff', "")
-                if (
-                    code == image_name.replace('.tiff', "").split('_')[0]
-                    and '.tiff' in image_name
-                    and 'ref' not in image_name
-                ):
-                    hologram = cv2.imread(
-                        '{}/{}'.format(img_folder, image_name), cv2.IMREAD_ANYDEPTH
-                    )
-                    hologram = hologram.astype(np.float32)
-                    holograms.append((hologram, image_name.replace('.tiff', ""), reference))
-
-    intensities = []
-    file_names = []
-    # Find intensities
-    for hologram in holograms:
-        holo, name, reference = hologram
-        if not os.path.exists('data/hulls'):
-            os.makedirs('data/hulls')
-        save_img_name = 'data/hulls/{}_{}_regions.png'.format(folder_name, name)
-        print('processing', name)
-        intensity = region_detector.get_intensity(holo, reference, save_img_name=save_img_name)
-        intensities.append(intensity)
-        file_names += [folder_name + '/' + name, "", ""]
-
-    # write to a csv file
-    intensities = list(itertools.zip_longest(*intensities, fillvalue=["", "", ""]))
-    intensities = [list(itertools.chain(*x)) for x in intensities]
-
-    intensities = (
-        [file_names] + [['x', 'y', 'intensity'] * int(int(len(file_names)) / 3)] + intensities
-    )
-
-    if not os.path.exists('data/intensities'):
-        os.makedirs('data/intensities')
-    csv_path = 'data/intensities/' + folder_name + '.csv'
-    with open(csv_path, 'w') as csvfile:
-        csvwriter = csv.writer(csvfile)
-        csvwriter.write_rows(intensities)"""
-
-
 def find_mser_params(pipeline_inputs: dict):
     raw_directory = pipeline_inputs['raw_directory']
     code_list = pipeline_inputs['code_list']
