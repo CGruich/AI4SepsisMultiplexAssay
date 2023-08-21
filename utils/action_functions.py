@@ -570,7 +570,7 @@ def train_code_classifier(
                 fc_size=fc_size,
                 fc_num=fc_num,
                 dropout_rate=dropout_rate,
-                patience=patience
+                patience=patience,
                 verbose=verbose,
                 log=log,
                 timestamp=timestamp,
