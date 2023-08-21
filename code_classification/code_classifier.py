@@ -27,17 +27,17 @@ class CodeClassifier(nn.Module):
             nn.BatchNorm2d(1),
             nn.Conv2d(in_channels=1, out_channels=ch1, kernel_size=(6, 6), stride=(3, 3)),
             nn.PReLU(),
-            nn.Dropout(p=dropout_rate),
+            #nn.Dropout(p=dropout_rate),
             nn.MaxPool2d(kernel_size=(2, 2)),
             nn.BatchNorm2d(ch1),
             nn.Conv2d(in_channels=ch1, out_channels=ch2, kernel_size=(4, 4), stride=(2, 2)),
             nn.PReLU(),
-            nn.Dropout(p=dropout_rate),
+            #nn.Dropout(p=dropout_rate),
             nn.MaxPool2d(kernel_size=(2, 2)),
             nn.BatchNorm2d(ch2),
             nn.Conv2d(in_channels=ch2, out_channels=ch3, kernel_size=(3, 3), stride=(1, 1)),
             nn.PReLU(),
-            nn.Dropout(p=dropout_rate),
+            #nn.Dropout(p=dropout_rate),
         ]
 
         # Convolutional layers reduce the size of their input by some amount. Because of this, we need to find out how
@@ -74,7 +74,6 @@ class CodeClassifier(nn.Module):
             # Add the final layer that outputs the code label predictions
             self.fc_layers.append(nn.BatchNorm1d(h1))
             self.fc_layers.append(nn.Linear(h1, n_codes))
-            # Dropout layer to prevent overfitting
             self.fc_layers.append(nn.Dropout(p=dropout_rate))
             # Because we use cross-entropy loss to train the model,
             # log(softmax(x)) is applied internally within the loss function.
@@ -92,7 +91,6 @@ class CodeClassifier(nn.Module):
         else:
             self.fc_layers.append(nn.BatchNorm1d(h1))
             self.fc_layers.append(nn.Linear(h1, n_codes))
-            # Dropout layer to prevent overfitting
             self.fc_layers.append(nn.Dropout(p=dropout_rate))
             # Because we use cross-entropy loss to train the model,
             # log(softmax(x)) is applied internally within the loss function.

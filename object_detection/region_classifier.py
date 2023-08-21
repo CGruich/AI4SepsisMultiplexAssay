@@ -30,12 +30,12 @@ class RegionClassifier(nn.Module):
             nn.BatchNorm2d(1),
             nn.Conv2d(in_channels=1, out_channels=ch1, kernel_size=(6, 6), stride=(3, 3)),
             nn.PReLU(),
-            nn.Dropout(p=self.dropout_rate),
+            #nn.Dropout(p=self.dropout_rate),
             nn.MaxPool2d(kernel_size=(2, 2)),
             nn.BatchNorm2d(ch1),
             nn.Conv2d(in_channels=ch1, out_channels=ch2, kernel_size=(4, 4), stride=(2, 2)),
             nn.PReLU(),
-            nn.Dropout(p=self.dropout_rate),
+            #nn.Dropout(p=self.dropout_rate),
             nn.MaxPool2d(kernel_size=(2, 2)),
         ]
 
@@ -73,14 +73,12 @@ class RegionClassifier(nn.Module):
             # Add the final layer that outputs the code label predictions
             self.fc_layers.append(nn.BatchNorm1d(h1))
             self.fc_layers.append(nn.Linear(h1, 2))
-            # Dropout layer to prevent overfitting
             self.fc_layers.append(nn.Dropout(p=self.dropout_rate))
             self.fc_layers.append(nn.Softmax(dim=-1))
         # Else if only one fully connected layer to add
         else:
             self.fc_layers.append(nn.BatchNorm1d(h1))
             self.fc_layers.append(nn.Linear(h1, 2))
-            # Dropout layer to prevent overfitting
             self.fc_layers.append(nn.Dropout(p=self.dropout_rate))
             self.fc_layers.append(nn.Softmax(dim=-1))
 

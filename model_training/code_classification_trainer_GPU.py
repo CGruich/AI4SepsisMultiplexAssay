@@ -530,8 +530,8 @@ class CodeClassifierTrainerGPU(object):
 
     def load_data(
         self,
-        train_dataset_np=None,
-        train_targets_np=None,
+        train_dataset_np: np.ndarray = None,
+        train_targets_np: np.ndarray = None,
         train_idx=None,
         val_idx=None,
         test_dataset: np.ndarray = None,
