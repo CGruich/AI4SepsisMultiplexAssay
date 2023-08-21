@@ -519,7 +519,8 @@ class RegionClassifierTrainerGPU(object):
         train_targets_np: np.ndarray = None,
         train_idx=None,
         val_idx=None,
-        test_dataset: np.ndarray = None,
+        test_dataset_np: np.ndarray = None,
+        test_targets_np: np.ndarray = None,
     ):
         """
         Function to load all positive and negative samples given a folder. This assumes there are two folders inside the
@@ -533,10 +534,9 @@ class RegionClassifierTrainerGPU(object):
         # Ensuring a train/val/test split
         assert train_idx is not None
         assert val_idx is not None
-        assert test_dataset is not None
+        assert test_dataset_np is not None
 
         self.train_data = np.take(train_dataset_np, train_idx, axis=0)
-        train_targets = np.take(train_targets_np, train_idx, axis=0)
         val_data = np.take(train_dataset_np, val_idx, axis=0)
         val_targets = np.take(train_targets_np, val_idx, axis=0)
 
@@ -568,7 +568,7 @@ class RegionClassifierTrainerGPU(object):
         # Setting up test dataset
         t_labels = []
         t_regions = []
-        for region, label in zip(test_dataset, train_targets):
+        for region, label in zip(test_dataset_np, test_targets_np):
             t_labels.append(label)
             t_regions.append(np.array(region[0][0], dtype=np.float32))
         t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.int32).unsqueeze(dim=-1)
