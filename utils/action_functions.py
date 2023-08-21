@@ -189,6 +189,7 @@ def train_region_classifier(
     fc_size: int = 64,
     fc_num: int = 2,
     dropout_rate: float = 0.3,
+    patience: int = 10,
     # Only used for Bayesian hyperparameter optimization
     hyper_dict: dict = None
 ):
@@ -215,6 +216,7 @@ def train_region_classifier(
         fc_size = pipeline_inputs.get("fc_size")
         fc_num = pipeline_inputs.get("fc_num")
         dropout_rate = pipeline_inputs.get("dropout_rate")
+        patience = pipeline_inputs.get("patience")
 
     if timestamp is None:
         timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
@@ -265,6 +267,7 @@ def train_region_classifier(
                 fc_size=fc_size,
                 fc_num=fc_num,
                 dropout_rate=dropout_rate,
+                patience=patience,
                 verbose=verbose,
                 log=log,
                 timestamp=timestamp,
@@ -286,6 +289,7 @@ def train_region_classifier(
                 fc_size=fc_size,
                 fc_num=fc_num,
                 dropout_rate=dropout_rate,
+                patience=patience,
                 verbose=verbose,
                 log=log,
                 timestamp=timestamp,
@@ -450,6 +454,7 @@ def train_code_classifier(
     fc_size: int = 64,
     fc_num: int = 2,
     dropout_rate: float = 0.3,
+    patience: int = 10,
     # Only used for Bayesian hyperparameter optimization
     hyper_dict: dict = None
 ):
@@ -473,6 +478,7 @@ def train_code_classifier(
         fc_size = pipeline_inputs.get("fc_size")
         fc_num = pipeline_inputs.get("fc_num")
         dropout_rate = pipeline_inputs.get("dropout_rate")
+        patience = pipeline_inputs.get("patience")
         
     if timestamp is None:
         timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
@@ -541,6 +547,7 @@ def train_code_classifier(
                 fc_size=fc_size,
                 fc_num=fc_num,
                 dropout_rate=dropout_rate,
+                patience=patience,
                 verbose=verbose,
                 log=log,
                 timestamp=timestamp,
@@ -563,6 +570,7 @@ def train_code_classifier(
                 fc_size=fc_size,
                 fc_num=fc_num,
                 dropout_rate=dropout_rate,
+                patience=patience
                 verbose=verbose,
                 log=log,
                 timestamp=timestamp,

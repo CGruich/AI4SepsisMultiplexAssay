@@ -42,6 +42,7 @@ class CodeClassifierTrainerGPU(object):
         fc_size: int = 256,
         fc_num: int = 2,
         dropout_rate: float = 0.1,
+        patience: int = 10,
         verbose: bool = True,
         log: bool = True,
         timestamp: str = datetime.now().strftime('%m_%d_%y_%H:%M'),
@@ -127,7 +128,7 @@ class CodeClassifierTrainerGPU(object):
         }
         # How many epochs to wait before stopping training if the model does not improve
         # This is an early-stopping hyperparameter
-        self.patience = 10
+        self.patience = patience
 
         # Tensorboard
         self.log = log
