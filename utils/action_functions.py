@@ -239,8 +239,7 @@ def train_region_classifier(
     )
     training_targets = np.asarray(list(zip(*training_data))[-1])
     test_targets = np.asarray(list(zip(*test_data))[-1])
-    print(test_data)
-    print(test_targets)
+
     # CG: Stratified k-Fold cross-validation
     # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
     splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state)

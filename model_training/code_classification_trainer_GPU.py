@@ -606,9 +606,9 @@ class CodeClassifierTrainerGPU(object):
         :return: None.
         """
 
-        path = self.model_save_path
+        path = os.path.join(self.model_save_path, self.log_timestamp, "checkpoints")
         model_save_file = os.path.join(path, 'model_{}.pt'.format(epoch))
-        train_csv_path = 'data/code_training_losses.csv'
+        train_csv_path = os.path.join(self.model_save_path, self.log_timestamp, 'code_classifier_learning_curves.csv')
 
         if self.verbose:
             print(path)
@@ -633,8 +633,3 @@ class CodeClassifierTrainerGPU(object):
                         ls['test_loss'][i],
                     )
                 )
-
-    def one_hot(self, value):
-        arr = [0 for _ in range(self.num_codes)]
-        arr[value] = 1
-        return arr

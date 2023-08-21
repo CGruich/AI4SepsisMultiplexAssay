@@ -598,9 +598,9 @@ class RegionClassifierTrainerGPU(object):
         :return: None.
         """
 
-        path = self.model_save_path
+        path = os.path.join(self.model_save_path, self.log_timestamp, "checkpoints")
         model_save_file = os.path.join(path, 'model_{}.pt'.format(epoch))
-        train_csv_path = 'data/region_training_losses.csv'
+        train_csv_path = os.path.join(self.model_save_path, self.log_timestamp, 'region_classifier_learning_curves.csv')
 
         if self.verbose:
             print(path)
