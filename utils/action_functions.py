@@ -20,6 +20,8 @@ from . import (
 # Hyperparameter optimization
 import optuna
 from optuna.trial import TrialState
+# Reloading checkpointed Bayesian optimization studies
+import joblib
 
 def find_mser_params(pipeline_inputs: dict):
     raw_directory = pipeline_inputs['raw_directory']
@@ -429,9 +431,6 @@ def train_code_classifier(
 
     assert codes is not None and len(codes) != 0
 
-    trainer = CodeClassifierTrainerGPU(
-        codes, model_save_path=pipeline_inputs['model_save_parent_directory']
-    )
     code_data_composite = []
     for code in codes:
         code_path = os.path.join(load_data_path, 'code ' + code)
@@ -552,8 +551,17 @@ def train_code_classifier(
 def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
     # Currently only implemented for the Jupyter notebook pipeline,
     assert pipeline_inputs is not None
-    # Create an OpTuna study, maximize the accuracy
-    study = optuna.create_study(direction='maximize')
+
+    # Defaults to None if not specified in pipeline inputs
+    checkpoint = pipeline_inputs.get('checkpoint')
+
+    # If restarting a study from a saved checkpoint,
+    if checkpoint is not None:
+        study = joblib.load(checkpoint)
+    else:
+        # Create an OpTuna study, maximize the accuracy
+        study = optuna.create_study(direction='maximize')
+
     # By default, OpTuna objective functions for objective minimization/maximization does not accept custom input variables
     # However, we can easily accomodate custom input variables in this way with some lambda operations,
 
@@ -569,12 +577,6 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
             pipeline_inputs['checkpoint_path'], pipeline_inputs['timestamp']
         ),
     )
-
-    """# Optimize the study
-    study.optimize(objective_with_custom_input, 
-                    n_trials=pipeline_inputs["num_hpo"], 
-                    timeout=pipeline_inputs["timeout"],
-                    callbacks=[pruning_callback])"""
 
     # Get the pruned trials (trials pruned prematurely)
     pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
@@ -600,8 +602,17 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
 def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
     # Currently only implemented for the Jupyter notebook pipeline,
     assert pipeline_inputs is not None
-    # Create an OpTuna study, maximize the accuracy
-    study = optuna.create_study(direction='maximize')
+
+    # Defaults to None if not specified in pipeline inputs
+    checkpoint = pipeline_inputs.get('checkpoint')
+
+    # If restarting a study from a saved checkpoint,
+    if checkpoint is not None:
+        study = joblib.load(checkpoint)
+    else:
+        # Create an OpTuna study, maximize the accuracy
+        study = optuna.create_study(direction='maximize')
+    
     # By default, OpTuna objective functions for objective minimization/maximization does not accept custom input variables
     # However, we can easily accomodate custom input variables in this way with some lambda operations,
 
@@ -617,12 +628,6 @@ def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
             pipeline_inputs['checkpoint_path'], pipeline_inputs['timestamp']
         ),
     )
-
-    """# Optimize the study
-    study.optimize(objective_with_custom_input, 
-                    n_trials=pipeline_inputs["num_hpo"], 
-                    timeout=pipeline_inputs["timeout"],
-                    callbacks=[pruning_callback])"""
 
     # Get the pruned trials (trials pruned prematurely)
     pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])

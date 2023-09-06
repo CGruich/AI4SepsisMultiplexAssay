@@ -417,7 +417,7 @@ class RegionClassifierTrainerGPU(object):
         self.model.eval()
 
         # Moving the model to GPU is in-place, but moving data is not.
-        samples, labels = self.val_data
+        samples, labels = self.test_data
         samples = samples.to(self.device)
         samples = torch.unsqueeze(samples, dim=1)
         labels = labels.to(self.device)
