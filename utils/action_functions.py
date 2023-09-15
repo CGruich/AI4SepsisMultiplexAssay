@@ -16,14 +16,48 @@ from . import (
     helper_functions,
     bayesian,
 )
+# For setting RNG
+import torch
+import random
 
 # Hyperparameter optimization
 import optuna
 from optuna.trial import TrialState
+from optuna.samplers import TPESampler
 # Reloading checkpointed Bayesian optimization studies
 import joblib
 
+def set_experimental_rng(pipeline_inputs: dict,
+                         exact: bool = False):
+    random_state = pipeline_inputs.get("strat_kfold", {}).get("random_state")
+    verbose = pipeline_inputs.get("verbose")
+
+    assert type(random_state) is int
+    assert type(verbose) is bool
+    if random_state is not None:
+        torch.manual_seed(random_state)
+        torch.cuda.manual_seed(random_state)
+        # Improves exact reproducibility but at the cost of performance
+        if exact:
+            # Pick a deterministic convolutional algorithm
+            # By default, this is nondeterministic algorithm selection
+            # across different hardware
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+        np.random.seed(random_state)
+        # Probably not needed but just in-case
+        random.seed(random_state)
+    
+        if verbose is not None:
+            if verbose:
+                print(f'Random Seed Set: {random_state}')
+
 def find_mser_params(pipeline_inputs: dict):
+
+    # Set random state if available...
+    set_experimental_rng(pipeline_inputs=pipeline_inputs,
+                         exact=False)
+    
     raw_directory = pipeline_inputs['raw_directory']
     code_list = pipeline_inputs['code_list']
 
@@ -137,6 +171,10 @@ def train_region_classifier(
     hyper_dict: dict = None
 ):
 
+    # Set random state if available...
+    set_experimental_rng(pipeline_inputs=pipeline_inputs,
+                         exact=False)
+    
     # Train a new classifier with the data located under
     # data/classifier_training_samples/positive and
     # data/classifier_training_samples/negative
@@ -267,6 +305,10 @@ def train_region_classifier(
 def classify_regions(pipeline_inputs: dict = None):
     assert pipeline_inputs is not None
 
+    # Set random state if available...
+    set_experimental_rng(pipeline_inputs=pipeline_inputs,
+                         exact=False)
+    
     # Get the parent directory of raw images for all codes
     raw_directory = pipeline_inputs['raw_directory']
     # Get the parent directory to save visual representation of all regions detected by MSER
@@ -406,6 +448,11 @@ def train_code_classifier(
 ):
 
     if pipeline_inputs is not None:
+        
+        # Set random state if available...
+        set_experimental_rng(pipeline_inputs=pipeline_inputs,
+                            exact=False)
+        
         load_data_path = pipeline_inputs.get("sample_parent_directory")
         model_save_path = pipeline_inputs.get("model_save_parent_directory")
         codes = pipeline_inputs.get("code_list")
@@ -552,6 +599,11 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
     # Currently only implemented for the Jupyter notebook pipeline,
     assert pipeline_inputs is not None
 
+    # Set random state if available...
+    set_experimental_rng(pipeline_inputs=pipeline_inputs,
+                         exact=False)
+    random_state = pipeline_inputs.get("strat_kfold", {}).get("random_state")
+
     # Defaults to None if not specified in pipeline inputs
     checkpoint = pipeline_inputs.get('checkpoint')
 
@@ -560,7 +612,8 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
         study = joblib.load(checkpoint)
     else:
         # Create an OpTuna study, maximize the accuracy
-        study = optuna.create_study(direction='maximize')
+        study = optuna.create_study(direction='maximize', 
+                                    sampler=TPESampler(seed=random_state))
 
     # By default, OpTuna objective functions for objective minimization/maximization does not accept custom input variables
     # However, we can easily accomodate custom input variables in this way with some lambda operations,
@@ -603,6 +656,11 @@ def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
     # Currently only implemented for the Jupyter notebook pipeline,
     assert pipeline_inputs is not None
 
+    # Set random state if available...
+    set_experimental_rng(pipeline_inputs=pipeline_inputs,
+                         exact=False)
+    random_state = pipeline_inputs.get("strat_kfold", {}).get("random_state")
+
     # Defaults to None if not specified in pipeline inputs
     checkpoint = pipeline_inputs.get('checkpoint')
 
@@ -611,7 +669,8 @@ def bayesian_optimize_region_classifer(pipeline_inputs: dict = None):
         study = joblib.load(checkpoint)
     else:
         # Create an OpTuna study, maximize the accuracy
-        study = optuna.create_study(direction='maximize')
+        study = optuna.create_study(direction='maximize', 
+                                    sampler=TPESampler(seed=random_state))
     
     # By default, OpTuna objective functions for objective minimization/maximization does not accept custom input variables
     # However, we can easily accomodate custom input variables in this way with some lambda operations,
