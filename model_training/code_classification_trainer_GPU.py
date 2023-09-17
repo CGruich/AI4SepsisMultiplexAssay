@@ -42,6 +42,7 @@ class CodeClassifierTrainerGPU(object):
         fc_size: int = 256,
         fc_num: int = 2,
         dropout_rate: float = 0.1,
+        k: int = None,
         patience: int = 10,
         verbose: bool = True,
         log: bool = True,
@@ -141,12 +142,20 @@ class CodeClassifierTrainerGPU(object):
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         # Cross Entropy Loss for multi-class problems
         self.loss_fn = nn.CrossEntropyLoss()
+        # Current cross-validation fold
+        self.k = k
 
         # If logging via tensorboard, define a dedicated writer to log the results
         if self.log:
-            self.writer = SummaryWriter(
-                os.path.join(self.model_save_path, self.log_timestamp, 'logs')
-            )
+            # If cross-validating,
+            if k is not None:
+                self.writer = SummaryWriter(
+                    os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'logs')
+                )
+            else:
+                self.writer = SummaryWriter(
+                    os.path.join(self.model_save_path, self.log_timestamp, 'logs')
+                )
 
     def train(self, cross_validation: bool = False, cross_validation_scores=None):
         """
@@ -542,9 +551,9 @@ class CodeClassifierTrainerGPU(object):
         :return: None.
         """
 
-        path = os.path.join(self.model_save_path, self.log_timestamp, "checkpoints")
+        path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "checkpoints")
         if save_name is None:
-            model_save_file = os.path.join(path, 'model_{}.pt'.format(epoch))
+            model_save_file = os.path.join(path, 'fold_{}_{}.pt'.format(self.k, epoch))
         else:
             assert '.pth' in save_name
             model_save_file = os.path.join(path, save_name)

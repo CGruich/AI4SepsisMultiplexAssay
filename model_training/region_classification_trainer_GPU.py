@@ -39,6 +39,7 @@ class RegionClassifierTrainerGPU(object):
         fc_size: int = 64,
         fc_num: int = 2,
         dropout_rate: float = 0.3,
+        k: int = None,
         patience: int = 10,
         verbose: bool = True,
         log: bool = True,
@@ -140,12 +141,20 @@ class RegionClassifierTrainerGPU(object):
         # e.g., [0.452 0.691 0.988 0.042 0.562 0.112] (For illustration... these do not sum up to 1 in this example)
         # Target tensor should of size (batch_size, 1) and contain the actual label, e.g. [0 1 1 0 1 0]
         self.loss_fn = nn.BCELoss()
+        # Current cross-validation fold
+        self.k = k
 
         # If logging via tensorboard, define a dedicated writer to log the results
         if self.log:
-            self.writer = SummaryWriter(
-                os.path.join(self.model_save_path, self.log_timestamp, 'logs')
-            )
+            # If cross-validating,
+            if k is not None:
+                self.writer = SummaryWriter(
+                    os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'logs')
+                )
+            else:
+                self.writer = SummaryWriter(
+                    os.path.join(self.model_save_path, self.log_timestamp, 'logs')
+                )
 
     def train(self, cross_validation: bool = False, cross_validation_scores=None):
         """
@@ -525,9 +534,9 @@ class RegionClassifierTrainerGPU(object):
         :return: None.
         """
 
-        path = os.path.join(self.model_save_path, self.log_timestamp, "checkpoints")
+        path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "checkpoints")
         if save_name is None:
-            model_save_file = os.path.join(path, 'model_{}.pt'.format(epoch))
+            model_save_file = os.path.join(path, 'fold_{}_{}.pt'.format(self.k, epoch))
         else:
             assert '.pth' in save_name
             model_save_file = os.path.join(path, save_name)
