@@ -303,6 +303,8 @@ class RegionClassifierTrainerGPU(object):
         :return: Batches of augmented samples and the appropriate labels.
         """
 
+        #print('internal state generate_batches')
+        #print(data)
         batches = []
         transform_prob = 0.2
 
@@ -311,10 +313,17 @@ class RegionClassifierTrainerGPU(object):
         np.random.shuffle(indices)
 
         bs = self.batch_size
+        debug_counter = 0
+
         for i in range(len(data) // bs):
+            debug_counter = debug_counter + 1
+
             # Choose our random batch.
             idxs = indices[i * bs : i * bs + bs]
             batch = data[idxs]
+            
+            #print('internal batch')
+            #print(batch)
 
             samples = []
             labels = []
@@ -329,6 +338,7 @@ class RegionClassifierTrainerGPU(object):
 
             # Cast batch to tensor for PyTorch.
             samples = torch.as_tensor(np.array(samples, dtype=np.float32), dtype=torch.float32)
+
             print_images(
                 samples/65535,
                 path='data/classifier_training_samples/Data_Augmentation_Inspection/NoAugment',
@@ -494,7 +504,6 @@ class RegionClassifierTrainerGPU(object):
 
             v_labels.append(label)
             v_regions.append(np.array(region[0][0], dtype=np.float32))
-
 
         v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.int32).unsqueeze(dim=-1)
         v_regions = torch.as_tensor(np.array(v_regions), dtype=torch.float32)

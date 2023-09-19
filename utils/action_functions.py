@@ -156,6 +156,7 @@ def train_region_classifier(
     cross_validate: bool = False,
     k: int = 5,
     random_state: int = 100,
+    stratify_by_stain: bool = False,
     verbose: bool = True,
     log: bool = True,
     timestamp: str = None,
@@ -186,6 +187,7 @@ def train_region_classifier(
         cross_validate = pipeline_inputs.get("strat_kfold", {}).get("activate")
         k = pipeline_inputs.get("strat_kfold", {}).get("num_folds")
         random_state = pipeline_inputs.get("strat_kfold", {}).get("random_state")
+        stratify_by_stain = pipeline_inputs.get("strat_kfold", {}).get("stratify_by_stain", False)
         verbose = pipeline_inputs.get("verbose")
         log = pipeline_inputs.get("log")
         timestamp = pipeline_inputs.get("timestamp")
@@ -203,11 +205,12 @@ def train_region_classifier(
         timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
 
     # Returns list of lists
-    data_list = helper_functions.load_data(load_data_path, verbose=verbose)
+    data_list = helper_functions.load_data(load_data_path, verbose=verbose, stratify_by_stain=stratify_by_stain)
 
     # Based on the format of the return result of .load_data(),
     # Extract all the targets of the training samples
     targets = np.array(list(zip(*data_list))[-1])
+
     # All the samples
     dataset = np.asarray(
         data_list, dtype=object
@@ -216,10 +219,28 @@ def train_region_classifier(
     # Do a stratified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
     training_data, test_data = train_test_split(
-        dataset, test_size=test_size, stratify=targets
+        dataset, 
+        test_size=test_size, 
+        stratify=targets, 
+        random_state=random_state
     )
-    training_targets = np.asarray(list(zip(*training_data))[-1])
-    test_targets = np.asarray(list(zip(*test_data))[-1])
+
+    if stratify_by_stain:
+        training_targets_stain = np.asarray(list(zip(*training_data))[-1])
+        test_targets_stain = np.asarray(list(zip(*test_data))[-1])
+        training_targets = helper_functions.stain_labels_to_training_labels(data=training_targets_stain)
+        test_targets = helper_functions.stain_labels_to_training_labels(data=test_targets_stain)
+
+        for i, new_label in enumerate(training_targets):
+            training_data[i, -1] = new_label
+
+        for i, new_label in enumerate(test_targets):
+            test_data[i, -1] = new_label
+    else:
+        training_targets = np.asarray(list(zip(*training_data))[-1])
+        test_targets = np.asarray(list(zip(*test_data))[-1])
+        training_targets_stain = training_targets
+        test_targets_stain = test_targets
 
     # CG: Stratified k-Fold cross-validation
     # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
@@ -235,7 +256,7 @@ def train_region_classifier(
     fold_index = 1
     # For each fold, define training data indices and validation data indices from the input training dataset
     for fold, (train_idx, val_idx) in enumerate(
-        splits.split(training_data_idx, y=training_targets)
+        splits.split(training_data_idx, y=training_targets_stain)
     ):
         if verbose:
             print('\n\nFold {}'.format(fold + 1))
@@ -295,7 +316,7 @@ def train_region_classifier(
         # Keep track of what k-fold we are on for book-keeping
         fold_index = fold_index + 1
 
-    if verbose:
+    if pipeline_inputs['verbose']:
         print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
         print(cross_val_scores)
         # Average cross-validation scores
@@ -434,6 +455,7 @@ def train_code_classifier(
     cross_validate: bool = False,
     k: int = 5,
     random_state: int = 100,
+    stratify_by_stain: bool = False,
     verbose: bool = True,
     log: bool = True,
     timestamp: str = None,
@@ -462,6 +484,7 @@ def train_code_classifier(
         cross_validate = pipeline_inputs.get("strat_kfold", {}).get("activate")
         k = pipeline_inputs.get("strat_kfold", {}).get("num_folds")
         random_state = pipeline_inputs.get("strat_kfold", {}).get("random_state")
+        stratify_by_stain = pipeline_inputs.get("strat_kfold", {}).get("stratify_by_stain", False)
         verbose = pipeline_inputs.get("verbose")
         log = pipeline_inputs.get("log")
         timestamp = pipeline_inputs.get("timestamp")
@@ -483,7 +506,7 @@ def train_code_classifier(
     code_data_composite = []
     for code in codes:
         code_path = os.path.join(load_data_path, 'code ' + code)
-        code_data = helper_functions.load_code(code_folder_path=code_path)
+        code_data = helper_functions.load_code(code_folder_path=code_path, verbose=verbose, stratify_by_stain=stratify_by_stain)
         code_data_composite = code_data_composite + code_data
 
     # Based on the format of the return result of helper_functions.load_code(),
@@ -500,10 +523,24 @@ def train_code_classifier(
         stratify=targets,
         random_state=random_state,
     )
-    # Train targets
-    training_targets = np.asarray(list(zip(*training_data))[-1])
-    # Test targets
-    test_targets = np.asarray(list(zip(*test_data))[-1])
+
+    if stratify_by_stain:
+        training_targets_stain = np.asarray(list(zip(*training_data))[-1])
+        test_targets_stain = np.asarray(list(zip(*test_data))[-1])
+        
+        training_targets = helper_functions.stain_labels_to_training_labels(data=training_targets_stain)
+        test_targets = helper_functions.stain_labels_to_training_labels(data=test_targets_stain)
+
+        for i, new_label in enumerate(training_targets):
+            training_data[i, -1] = new_label
+
+        for i, new_label in enumerate(test_targets):
+            test_data[i, -1] = new_label
+    else:
+        training_targets = np.asarray(list(zip(*training_data))[-1])
+        test_targets = np.asarray(list(zip(*test_data))[-1])
+        training_targets_stain = training_targets
+        test_targets_stain = test_targets
 
     # CG: Stratified k-Fold cross-validation
     # Define a class to do the stratified splitting into folds
@@ -525,7 +562,7 @@ def train_code_classifier(
     fold_index = 1
     # For each fold in the training dataset, define a new training dataset and validation dataset based off the training targets
     for fold, (train_idx, val_idx) in enumerate(
-        splits.split(training_data_idx, y=training_targets)
+        splits.split(training_data_idx, y=training_targets_stain)
     ):
         if verbose:
             print('\n\nFold {}'.format(fold + 1))

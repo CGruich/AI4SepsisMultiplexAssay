@@ -12,7 +12,7 @@ import os
 import csv
 import itertools
 import re as regex
-
+from PIL import Image
 
 def normalize_by_reference(
     hologram,
@@ -179,9 +179,14 @@ def expand_bbox(bbox, desired_dims, image_boundary):
     return x1, y1, x2, y2, cx, cy
 
 
-def load_data(folder_path, verbose=True):
+def load_data(folder_path: str, verbose: bool = True, stratify_by_stain: bool = False):
     positive_sample_folder = os.path.join(folder_path, 'positive')
     negative_sample_folder = os.path.join(folder_path, 'negative')
+
+    # Filter incorrect image sizes, if any happen to make it in the dataset
+    filter_invalid_image_sizes(image_folder_path=positive_sample_folder, correct_image_size=(128, 128), img_ext='.png')
+    filter_invalid_image_sizes(image_folder_path=negative_sample_folder, correct_image_size=(128, 128), img_ext='.png')
+
     data = []
 
     # For each image in the positive samples folder.
@@ -194,7 +199,14 @@ def load_data(folder_path, verbose=True):
             os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
         )
 
-        label = 1
+        if stratify_by_stain:
+            # Follows filename convention:
+            # code 3_100_2_2170_1686_128x128.png
+            # code {code_num}_{stain_level}_{hologram_num}_{pixelX_position}_{pixelY_position}_{img_length}_{img_width}
+            stain_level = file_name.split('_')[1]
+            label = '1' + '_' + stain_level
+        else:
+            label = 1
 
         # Append region and positive label to dataset.
         data.append([region.reshape(1, *region.shape), label])
@@ -213,7 +225,15 @@ def load_data(folder_path, verbose=True):
         region = cv2.imread(
             os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
         )
-        label = 0
+        
+        if stratify_by_stain:
+            # Follows filename convention:
+            # code 3_100_2_2170_1686_128x128.png
+            # code {code_num}_{stain_level}_{hologram_num}_{pixelX_position}_{pixelY_position}_{img_length}_{img_width}
+            stain_level = file_name.split('_')[1]
+            label = '0' + '_' + stain_level
+        else:
+            label = 0
         # Append region and negative label to dataset.
         data.append([region.reshape(1, *region.shape), label])
 
@@ -223,6 +243,11 @@ def load_data(folder_path, verbose=True):
     # Return dataset
     return data
 
+def stain_labels_to_training_labels(data: np.ndarray, substr: str = '_'):
+    mask = np.char.find(data.astype(str), substr) != -1
+    data[mask] = [int(s.split('_')[0]) for s in data[mask]]
+
+    return data
 
 def sort_alphanumeric(string_list):
     assert hasattr(string_list, 'sort'), 'ERROR! TYPE {} DOES NOT HAVE A SORT FUNCTION'.format(
@@ -241,8 +266,12 @@ def sort_alphanumeric(string_list):
     string_list.sort(key=sorting_key)
 
 
-def load_code(code_folder_path, verbose=True):
+def load_code(code_folder_path, verbose=True, stratify_by_stain: bool = False):
     code_sample_folder = os.path.join(code_folder_path, 'positive')
+
+    # Filter incorrect image sizes, if any happen to make it in the dataset
+    filter_invalid_image_sizes(image_folder_path=code_sample_folder, correct_image_size=(128, 128), img_ext='.png')
+
     data = []
     try:
         code_designation = int(code_folder_path[-3:].strip('()'))
@@ -259,8 +288,16 @@ def load_code(code_folder_path, verbose=True):
         # Load region.
         region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
         try:
-            label = int(file_name[0:2].strip('()'))
+            label = int(file_name.split('_')[0].replace('code ', ''))
+
             assert label == code_designation
+            
+            if stratify_by_stain:
+                # Follows filename convention:
+                # code 3_100_2_2170_1686_128x128.png
+                # code {code_num}_{stain_level}_{hologram_num}_{pixelX_position}_{pixelY_position}_{img_length}_{img_width}
+                stain_level = file_name.split('_')[1]
+                label = str(label) + '_' + stain_level
         except:
             print(
                 '\n\nFAILURE OBTAINING TARGET LABEL FROM SAMPLE FILENAMES.\nThe sample filenames may not have been correctly labelled.'
@@ -394,3 +431,13 @@ def visualize_image(image_array: np.ndarray, scale: tuple = None):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     cv2.imshow('Image', image_array)
+
+def filter_invalid_image_sizes(image_folder_path: str, correct_image_size: tuple = (128, 128), img_ext: str = '.png'):
+    
+    for filename in os.listdir(image_folder_path):
+        if filename.endswith(img_ext):
+            img_path = os.path.join(image_folder_path, filename)
+            img = Image.open(img_path)
+            img_length, img_width = img.size
+            if img_length != correct_image_size[0] or img_width != correct_image_size[1]:
+                os.remove(img_path)
