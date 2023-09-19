@@ -549,7 +549,7 @@ class RegionClassifierTrainerGPU(object):
         else:
             assert '.pth' in save_name
             model_save_file = os.path.join(path, save_name)
-        train_csv_path = os.path.join(self.model_save_path, self.log_timestamp, 'region_classifier_learning_curves.csv')
+        train_csv_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'region_classifier_learning_curves.csv')
 
         if self.verbose:
             print(path)
