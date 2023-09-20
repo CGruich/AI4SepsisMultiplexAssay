@@ -5,10 +5,12 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import pathlib
 from torchvision import transforms
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from datetime import datetime
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 # Prints augmented images out for debugging
 
@@ -233,9 +235,9 @@ class CodeClassifierTrainerGPU(object):
             train_loss /= len(batches)
             train_acc /= len(batches)
             # Validation loss and accuracy
-            val_loss, val_acc = self.validate()
+            val_loss, val_acc = self.validate(epoch=epoch)
             # Test loss and accuracy
-            test_loss, test_acc = self.test()
+            test_loss, test_acc = self.test(epoch=epoch)
 
             if self.log:
                 # Write the loss and accuracies to tensorboard
@@ -407,7 +409,21 @@ class CodeClassifierTrainerGPU(object):
         return batches
 
     @torch.no_grad()
-    def validate(self):
+    def confusion_matrix_plot(self, labels, predictions, save_root: str, epoch = None, activate: bool = False):
+        
+        if activate:
+            pathlib.Path(save_root).mkdir(parents=True, exist_ok=True)
+
+            labels=labels.squeeze(dim=-1).to(torch.int32).cpu().numpy() - 1
+            predicted_labels = predictions.argmax(dim=-1).cpu().numpy() - 1
+            print(labels)
+            print(predicted_labels)
+            cm = confusion_matrix(labels, predicted_labels)
+            confusion_matrix_display = ConfusionMatrixDisplay(confusion_matrix=cm).plot()
+            confusion_matrix_display.figure_.savefig(os.path.join(save_root, f'cm_epoch{str(epoch)}'),dpi=72)
+
+    @torch.no_grad()
+    def validate(self, epoch=None):
         """
         Function to compute the validation loss and accuracy on a random batch of validation data.
         :return: Computed loss and accuracy.
@@ -428,6 +444,10 @@ class CodeClassifierTrainerGPU(object):
         loss = self.loss_fn(predictions, (labels - 1).to(torch.long)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
 
+        if epoch is not None:
+            save_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'confusion', 'validate')
+            self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=False)
+
         # Set the model back to training mode.
         self.model.train()
 
@@ -435,7 +455,7 @@ class CodeClassifierTrainerGPU(object):
         return loss, acc
 
     @torch.no_grad()
-    def test(self):
+    def test(self, epoch=None):
         """
         Function to compute the test loss and accuracy on a pre-defined test dataset data.
         :return: Computed loss and accuracy.
@@ -455,6 +475,10 @@ class CodeClassifierTrainerGPU(object):
         # CrossEntropyLoss() accepts unnormalized prediction logits
         loss = self.loss_fn(predictions, (labels - 1).to(torch.long)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
+
+        if epoch is not None:
+            save_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'confusion', 'test')
+            self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=False)
 
         # Set the model back to training mode.
         self.model.train()
