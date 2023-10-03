@@ -11,6 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from datetime import datetime
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
 # Prints augmented images out for debugging
 def print_images(
@@ -52,6 +53,12 @@ class RegionClassifierTrainerGPU(object):
 
         # Printing verbosity
         self.verbose = verbose
+
+        # Activates confusion matrices each epoch, which activates calculation of metrics like precision/recall
+        self.cm = True
+
+        # Activates printing confusion matrices each epoch
+        self.cm_fig = True
 
         # CG: CPU or GPU, prioritizes GPU if available.
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -118,6 +125,15 @@ class RegionClassifierTrainerGPU(object):
             'tl': [],
             'vl': [],
             'test_loss': [],
+            'tp': [],
+            'vp': [],
+            'test_precision': [],
+            'tr': [],
+            'vr': [],
+            'test_recall': [],
+            'tf1': [],
+            'vf1': [],
+            'test_f1': [],
         }
         # How many epochs to wait before stopping training if the model does not improve
         # This is an early-stopping hyperparameter
@@ -198,6 +214,9 @@ class RegionClassifierTrainerGPU(object):
 
             # Generate batches of augmented training samples.
             batches = self.generate_batches(train_data)
+            train_precision = 0
+            train_recall = 0
+            train_f1_score = 0
             for batch in tqdm(
                 batches, desc='Epoch ' + str(epoch) + ':', disable=not self.verbose
             ):
@@ -222,11 +241,23 @@ class RegionClassifierTrainerGPU(object):
                 )
                 train_loss += loss.detach().item()
 
+                save_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'confusion', 'train')
+                train_precision_batch, train_recall_batch, train_f1_score_batch = self.confusion_matrix_plot(labels, predictions, epoch=epoch, save_root=save_path, activate=self.cm, save_fig=self.cm_fig)
+                train_precision += train_precision_batch
+                train_recall += train_recall_batch
+                train_f1_score += train_f1_score_batch
+
             # Report training loss, training accuracy, validation loss, validation accuracy, and test loss/accuracy.
             train_loss /= len(batches)
             train_acc /= len(batches)
-            val_loss, val_acc = self.validate(epoch=epoch)
-            test_loss, test_acc = self.test(epoch=epoch)
+
+            if train_precision.all() != None and train_recall.all() != None:
+                train_precision /= len(batches)
+                train_recall /= len(batches)
+                train_f1_score /= len(batches)
+
+            val_loss, val_acc, val_precision, val_recall, val_f1_score = self.validate(epoch=epoch)
+            test_loss, test_acc, test_precision, test_recall, test_f1_score = self.test(epoch=epoch)
 
             if self.log:
                 writer.add_scalars(
@@ -239,20 +270,65 @@ class RegionClassifierTrainerGPU(object):
                     {'Train_Acc': train_acc, 'Val_Acc': val_acc, 'Test_Acc': test_acc},
                     epoch,
                 )
+                writer.add_scalars(
+                    'Mean Precision',
+                    {'Train_Mean_Precision': np.mean(train_precision) if train_precision.all() != None else -999, 'Val_Mean_Precision': np.mean(val_precision) if val_precision.all() != None else -999, 'Test_Mean_Precision': np.mean(test_precision) if test_precision.all() != None else -999},
+                    epoch,
+                )
+                writer.add_scalars(
+                    'Mean Recall',
+                    {'Train_Mean_Recall': np.mean(train_recall) if train_recall.all() != None else -999, 'Val_Mean_Recall': np.mean(val_recall) if val_recall.all() != None else -999, 'Test_Mean_Recall': np.mean(test_recall) if test_recall.all() != None else -999},
+                    epoch,
+                )
+                writer.add_scalars(
+                    'Mean F1 Score',
+                    {'Train_F1_Score': np.mean(train_f1_score) if train_f1_score.all() != None else -999, 'Val_F1_Score': np.mean(val_f1_score) if val_f1_score.all() != None else -999, 'Test_F1_Score': np.mean(test_f1_score) if test_f1_score.all() != None else -999},
+                    epoch,
+                )
+
                 writer.add_scalar('Train_Loss', train_loss, epoch)
                 writer.add_scalar('Train_Acc', train_acc, epoch)
+
                 writer.add_scalar('Val_Loss', val_loss, epoch)
                 writer.add_scalar('Val_Acc', val_acc, epoch)
+
                 writer.add_scalar('Test_Loss', test_loss, epoch)
                 writer.add_scalar('Test_Acc', test_acc, epoch)
+
                 writer.add_scalar('Patience (Early Stopping)', patience, epoch)
+
+                writer.add_scalar('Train_Mean_Precision', np.mean(train_precision) if train_precision.all() != None else -999, epoch)
+                writer.add_scalar('Train_Mean_Recall', np.mean(train_recall) if train_recall.all() != None else -999, epoch)
+                writer.add_scalar('Train_Mean_F1_Score', np.mean(train_f1_score) if train_f1_score.all() != None else -999, epoch)
+
+                writer.add_scalar('Val_Mean_Precision', np.mean(val_precision) if val_precision.all() != None else -999, epoch)
+                writer.add_scalar('Val_Mean_Recall', np.mean(val_recall) if val_recall.all() != None else -999, epoch)
+                writer.add_scalar('Val_Mean_F1_Score', np.mean(val_f1_score) if val_f1_score.all() != None else -999, epoch)
+
+                writer.add_scalar('Test_Mean_Precision', np.mean(test_precision) if test_precision.all() != None else -999, epoch)
+                writer.add_scalar('Test_Mean_Recall', np.mean(test_recall) if test_recall.all() != None else -999, epoch)
+                writer.add_scalar('Test_Mean_F1_Score', np.mean(test_f1_score) if test_f1_score.all() != None else -999, epoch)
 
             self.losses['ta'].append(train_acc)
             self.losses['va'].append(val_acc)
             self.losses['test_acc'].append(test_acc)
+
             self.losses['tl'].append(train_loss)
             self.losses['vl'].append(val_loss)
             self.losses['test_loss'].append(test_loss)
+
+            self.losses['tp'].append(np.mean(train_precision) if train_precision.all() != None else -999)
+            self.losses['vp'].append(np.mean(val_precision) if val_precision.all() != None else -999)
+            self.losses['test_precision'].append(np.mean(test_precision) if test_precision.all() != None else -999)
+
+            self.losses['tr'].append(np.mean(train_recall) if train_recall.all() != None else -999)
+            self.losses['vr'].append(np.mean(val_recall) if val_recall.all() != None else -999)
+            self.losses['test_recall'].append(np.mean(test_recall) if test_recall.all() != None else -999)
+
+            self.losses['tf1'].append(np.mean(train_f1_score) if train_f1_score.all() != None else -999)
+            self.losses['vf1'].append(np.mean(val_f1_score) if val_f1_score.all() != None else -999)
+            self.losses['test_f1'].append(np.mean(test_f1_score) if test_f1_score.all() != None else -999)
+
             self.losses['epoch'].append(epoch)
 
             # If enough epochs have passed that we need to save the model, do so.
@@ -305,8 +381,6 @@ class RegionClassifierTrainerGPU(object):
         :return: Batches of augmented samples and the appropriate labels.
         """
 
-        #print('internal state generate_batches')
-        #print(data)
         batches = []
         transform_prob = 0.2
 
@@ -323,9 +397,6 @@ class RegionClassifierTrainerGPU(object):
             # Choose our random batch.
             idxs = indices[i * bs : i * bs + bs]
             batch = data[idxs]
-            
-            #print('internal batch')
-            #print(batch)
 
             samples = []
             labels = []
@@ -401,7 +472,7 @@ class RegionClassifierTrainerGPU(object):
         return batches
 
     @torch.no_grad()
-    def confusion_matrix_plot(self, labels, predictions, save_root: str, epoch = None, activate: bool = False):
+    def confusion_matrix_plot(self, labels, predictions, save_root: str, epoch = None, activate: bool = False, save_fig: bool = False):
         
         if activate:
             pathlib.Path(save_root).mkdir(parents=True, exist_ok=True)
@@ -409,8 +480,20 @@ class RegionClassifierTrainerGPU(object):
             labels=labels.squeeze(dim=-1).to(torch.int32).cpu().numpy()
             predicted_labels = predictions.argmax(dim=-1).cpu().numpy()
             cm = confusion_matrix(labels, predicted_labels)
-            confusion_matrix_display = ConfusionMatrixDisplay(confusion_matrix=cm).plot()
-            confusion_matrix_display.figure_.savefig(os.path.join(save_root, f'cm_epoch{str(epoch)}'),dpi=72)
+            precision = np.diag(cm) / np.sum(cm, axis = 0)
+            recall = np.diag(cm) / np.sum(cm, axis = 1)
+            f1_score = 2*((precision*recall) / (precision + recall))
+
+            if save_fig:
+                confusion_matrix_display = ConfusionMatrixDisplay(confusion_matrix=cm).plot()
+                confusion_matrix_display.figure_.savefig(os.path.join(save_root, f'cm_epoch{str(epoch)}'),dpi=72)
+            
+            plt.close(fig='all')
+            
+            return (precision, recall, f1_score)
+
+        else:
+            return (None, None, None)
 
     @torch.no_grad()
     def validate(self, epoch=None):
@@ -435,13 +518,13 @@ class RegionClassifierTrainerGPU(object):
 
         if epoch is not None:
             save_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'confusion', 'validate')
-            self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=False)
+            precision, recall, f1_score = self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=self.cm, save_fig=self.cm_fig)
 
         # Set the model back to training mode.
         self.model.train()
 
         # Return the computed loss and accuracy values.
-        return loss, acc
+        return loss, acc, precision, recall, f1_score
 
     @torch.no_grad()
     def test(self, epoch=None):
@@ -466,13 +549,13 @@ class RegionClassifierTrainerGPU(object):
 
         if epoch is not None:
             save_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'confusion', 'test')
-            self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=False)
+            precision, recall, f1_score = self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=self.cm, save_fig=self.cm_fig)
         
         # Set the model back to training mode.
         self.model.train()
 
         # Return the computed loss and accuracy values.
-        return loss, acc
+        return loss, acc, precision, recall, f1_score
 
     @torch.no_grad()
     def compute_accuracy(self, labels, predictions):
@@ -582,11 +665,11 @@ class RegionClassifierTrainerGPU(object):
         with open(train_csv_path, 'w') as f:
             ls = self.losses
             f.write(
-                'Epoch,Training Accuracy,Validation Accuracy,Test Accuracy,Training Loss,Validation Loss,Test Loss\n'
+                'Epoch,Training Accuracy,Validation Accuracy,Test Accuracy,Training Loss,Validation Loss,Test Loss,Training Mean Precision,Validation Mean Precision,Test Mean Precision,Training Mean Recall,Validation Mean Recall,Test Mean Recall,Training Mean F1 Score,Validation Mean F1 Score,Test Mean F1 Score\n'
             )
             for i in range(epoch):
                 f.write(
-                    '{},{},{},{},{},{},{}\n'.format(
+                    '{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
                         ls['epoch'][i],
                         ls['ta'][i],
                         ls['va'][i],
@@ -594,5 +677,14 @@ class RegionClassifierTrainerGPU(object):
                         ls['tl'][i],
                         ls['vl'][i],
                         ls['test_loss'][i],
+                        ls['tp'][i],
+                        ls['vp'][i],
+                        ls['test_precision'][i],
+                        ls['tr'][i],
+                        ls['vr'][i],
+                        ls['test_recall'][i],
+                        ls['tf1'][i],
+                        ls['vf1'][i],
+                        ls['test_f1'][i],
                     )
                 )

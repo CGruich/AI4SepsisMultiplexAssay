@@ -11,10 +11,9 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from datetime import datetime
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
 # Prints augmented images out for debugging
-
-
 def print_images(
     sample_batch_tensor,
     path: str = None,
@@ -56,8 +55,15 @@ class CodeClassifierTrainerGPU(object):
         # Printing verbosity
         self.verbose = verbose
 
+        # Activates confusion matrices each epoch, which activates calculation of metrics like precision/recall
+        self.cm = True
+
+        # Activates printing confusion matrices each epoch
+        self.cm_fig = True
+
         # CG: CPU or GPU, prioritizes GPU if available.
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
         # Print availability to GPU
         if self.verbose:
             print('CUDA Availability: ' + str(torch.cuda.is_available()))
@@ -128,6 +134,15 @@ class CodeClassifierTrainerGPU(object):
             'tl': [],
             'vl': [],
             'test_loss': [],
+            'tp': [],
+            'vp': [],
+            'test_precision': [],
+            'tr': [],
+            'vr': [],
+            'test_recall': [],
+            'tf1': [],
+            'vf1': [],
+            'test_f1': [],
         }
         # How many epochs to wait before stopping training if the model does not improve
         # This is an early-stopping hyperparameter
@@ -198,6 +213,12 @@ class CodeClassifierTrainerGPU(object):
             # Generate batches of augmented training samples.
             # CG: These augmented samples are confirmed to be reasonable with commit #36a7ce4
             batches = self.generate_batches(train_data)
+            len_batches = len(batches)
+            len_stat_vector = self.num_codes
+            # Initialize classifier scores as 0
+            train_precision = 0
+            train_recall = 0
+            train_f1_score = 0
             # For each generated batch,
             for batch in tqdm(
                 batches, desc='Epoch ' + str(epoch) + ':', disable=not self.verbose
@@ -212,7 +233,6 @@ class CodeClassifierTrainerGPU(object):
                 labels = labels.to(self.device)
                 # Use the model to predict the labels for each sample.
                 predictions = model.forward(samples)
-
 
                 # Compute the loss and take one step along the gradient.
                 # Our barcodes are labelled from 1 ... N
@@ -230,17 +250,56 @@ class CodeClassifierTrainerGPU(object):
                 )
                 train_loss += loss.detach().item()
 
+                save_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'confusion', 'train')
+                train_precision_batch, train_recall_batch, train_f1_score_batch = self.confusion_matrix_plot(labels, predictions, epoch=epoch, save_root=save_path, activate=self.cm, save_fig=self.cm_fig)
+                
+                # Correct for undefined results
+                train_precision_batch[np.isnan(train_precision_batch)] = 0
+                train_recall_batch[np.isnan(train_recall_batch)] = 0
+                train_f1_score_batch[np.isnan(train_f1_score_batch)] = 0
+
+                # Based on bugs or label imbalance, it is possible that a label could be excluded from the confusion matrix
+                # Only compose a precision, recall, f1score for consistent # of labels,
+
+                # This satisfies an edge case of inconsistent vector lengths resulting from the sklearn confusion matrix function
+                # If vector lengths are inconsistent, then the vectors-per-batch cannot be added together.
+                # If we happen to find a vector of larger length than the current largest length,
+                # then call that the new largest length
+                if len(train_precision_batch) > len_stat_vector:
+                    len_stat_vector = len(train_precision_batch)
+
+                if len(train_precision_batch) == len_stat_vector:
+                    train_precision += train_precision_batch
+                    train_recall += train_recall_batch
+                    train_f1_score += train_f1_score_batch
+                # Otherwise, if we found a batch with inconsistent vector lengths, decrement the # of batches
+                # We do this to properly compute an average without considering the problematic batch..
+                else:
+                    len_batches - 1
+
             # Report training loss, training accuracy, validation loss, validation accuracy, and test loss/accuracy.
             # This is a per-batch average of the loss and accuracy, making the training robust to different batch sizes/gradient estimates
             train_loss /= len(batches)
             train_acc /= len(batches)
-            # Validation loss and accuracy
-            val_loss, val_acc = self.validate(epoch=epoch)
-            # Test loss and accuracy
-            test_loss, test_acc = self.test(epoch=epoch)
+
+            if train_precision.all() != None and train_recall.all() != None:
+                train_precision /= len(batches)
+                train_recall /= len(batches)
+                train_f1_score /= len(batches)
+
+            val_loss, val_acc, val_precision, val_recall, val_f1_score = self.validate(epoch=epoch)
+            # Correct for undefined results
+            val_precision[np.isnan(val_precision)] = 0
+            val_recall[np.isnan(val_recall)] = 0
+            val_f1_score[np.isnan(val_f1_score)] = 0
+
+            test_loss, test_acc, test_precision, test_recall, test_f1_score = self.test(epoch=epoch)
+            # Correct for undefined results
+            test_precision[np.isnan(test_precision)] = 0
+            test_recall[np.isnan(test_recall)] = 0
+            test_f1_score[np.isnan(test_f1_score)] = 0
 
             if self.log:
-                # Write the loss and accuracies to tensorboard
                 writer.add_scalars(
                     'Loss',
                     {'Train_Loss': train_loss, 'Val_Loss': val_loss, 'Test_Loss': test_loss,},
@@ -251,20 +310,65 @@ class CodeClassifierTrainerGPU(object):
                     {'Train_Acc': train_acc, 'Val_Acc': val_acc, 'Test_Acc': test_acc},
                     epoch,
                 )
+                writer.add_scalars(
+                    'Mean Precision',
+                    {'Train_Mean_Precision': np.mean(train_precision) if train_precision.all() != None else -999, 'Val_Mean_Precision': np.mean(val_precision) if val_precision.all() != None else -999, 'Test_Mean_Precision': np.mean(test_precision) if test_precision.all() != None else -999},
+                    epoch,
+                )
+                writer.add_scalars(
+                    'Mean Recall',
+                    {'Train_Mean_Recall': np.mean(train_recall) if train_recall.all() != None else -999, 'Val_Mean_Recall': np.mean(val_recall) if val_recall.all() != None else -999, 'Test_Mean_Recall': np.mean(test_recall) if test_recall.all() != None else -999},
+                    epoch,
+                )
+                writer.add_scalars(
+                    'Mean F1 Score',
+                    {'Train_F1_Score': np.mean(train_f1_score) if train_f1_score.all() != None else -999, 'Val_F1_Score': np.mean(val_f1_score) if val_f1_score.all() != None else -999, 'Test_F1_Score': np.mean(test_f1_score) if test_f1_score.all() != None else -999},
+                    epoch,
+                )
+
                 writer.add_scalar('Train_Loss', train_loss, epoch)
                 writer.add_scalar('Train_Acc', train_acc, epoch)
+
                 writer.add_scalar('Val_Loss', val_loss, epoch)
                 writer.add_scalar('Val_Acc', val_acc, epoch)
+
                 writer.add_scalar('Test_Loss', test_loss, epoch)
                 writer.add_scalar('Test_Acc', test_acc, epoch)
+
                 writer.add_scalar('Patience (Early Stopping)', patience, epoch)
+
+                writer.add_scalar('Train_Mean_Precision', np.mean(train_precision) if train_precision.all() != None else -999, epoch)
+                writer.add_scalar('Train_Mean_Recall', np.mean(train_recall) if train_recall.all() != None else -999, epoch)
+                writer.add_scalar('Train_Mean_F1_Score', np.mean(train_f1_score) if train_f1_score.all() != None else -999, epoch)
+
+                writer.add_scalar('Val_Mean_Precision', np.mean(val_precision) if val_precision.all() != None else -999, epoch)
+                writer.add_scalar('Val_Mean_Recall', np.mean(val_recall) if val_recall.all() != None else -999, epoch)
+                writer.add_scalar('Val_Mean_F1_Score', np.mean(val_f1_score) if val_f1_score.all() != None else -999, epoch)
+
+                writer.add_scalar('Test_Mean_Precision', np.mean(test_precision) if test_precision.all() != None else -999, epoch)
+                writer.add_scalar('Test_Mean_Recall', np.mean(test_recall) if test_recall.all() != None else -999, epoch)
+                writer.add_scalar('Test_Mean_F1_Score', np.mean(test_f1_score) if test_f1_score.all() != None else -999, epoch)
 
             self.losses['ta'].append(train_acc)
             self.losses['va'].append(val_acc)
             self.losses['test_acc'].append(test_acc)
+
             self.losses['tl'].append(train_loss)
             self.losses['vl'].append(val_loss)
             self.losses['test_loss'].append(test_loss)
+
+            self.losses['tp'].append(np.mean(train_precision) if train_precision.all() != None else -999)
+            self.losses['vp'].append(np.mean(val_precision) if val_precision.all() != None else -999)
+            self.losses['test_precision'].append(np.mean(test_precision) if test_precision.all() != None else -999)
+
+            self.losses['tr'].append(np.mean(train_recall) if train_recall.all() != None else -999)
+            self.losses['vr'].append(np.mean(val_recall) if val_recall.all() != None else -999)
+            self.losses['test_recall'].append(np.mean(test_recall) if test_recall.all() != None else -999)
+
+            self.losses['tf1'].append(np.mean(train_f1_score) if train_f1_score.all() != None else -999)
+            self.losses['vf1'].append(np.mean(val_f1_score) if val_f1_score.all() != None else -999)
+            self.losses['test_f1'].append(np.mean(test_f1_score) if test_f1_score.all() != None else -999)
+
             self.losses['epoch'].append(epoch)
 
             # If enough epochs have passed that we need to save the model, do so.
@@ -409,18 +513,29 @@ class CodeClassifierTrainerGPU(object):
         return batches
 
     @torch.no_grad()
-    def confusion_matrix_plot(self, labels, predictions, save_root: str, epoch = None, activate: bool = False):
+    def confusion_matrix_plot(self, labels, predictions, save_root: str, epoch = None, activate: bool = False, save_fig: bool = False):
         
         if activate:
             pathlib.Path(save_root).mkdir(parents=True, exist_ok=True)
 
             labels=labels.squeeze(dim=-1).to(torch.int32).cpu().numpy() - 1
-            predicted_labels = predictions.argmax(dim=-1).cpu().numpy() - 1
-            print(labels)
-            print(predicted_labels)
+            predicted_labels=predictions.argmax(dim=-1).cpu().numpy()
+
             cm = confusion_matrix(labels, predicted_labels)
-            confusion_matrix_display = ConfusionMatrixDisplay(confusion_matrix=cm).plot()
-            confusion_matrix_display.figure_.savefig(os.path.join(save_root, f'cm_epoch{str(epoch)}'),dpi=72)
+            precision = np.diag(cm) / np.sum(cm, axis = 0)
+            recall = np.diag(cm) / np.sum(cm, axis = 1)
+            f1_score = 2*((precision*recall) / (precision + recall))
+
+            if save_fig:
+                confusion_matrix_display = ConfusionMatrixDisplay(confusion_matrix=cm).plot()
+                confusion_matrix_display.figure_.savefig(os.path.join(save_root, f'cm_epoch{str(epoch)}'),dpi=72)
+            
+            plt.close(fig='all')
+            
+            return (precision, recall, f1_score)
+
+        else:
+            return (None, None, None)
 
     @torch.no_grad()
     def validate(self, epoch=None):
@@ -446,13 +561,13 @@ class CodeClassifierTrainerGPU(object):
 
         if epoch is not None:
             save_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'confusion', 'validate')
-            self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=False)
+            precision, recall, f1_score = self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=self.cm, save_fig=self.cm_fig)
 
         # Set the model back to training mode.
         self.model.train()
 
         # Return the computed loss and accuracy values.
-        return loss, acc
+        return loss, acc, precision, recall, f1_score
 
     @torch.no_grad()
     def test(self, epoch=None):
@@ -478,13 +593,13 @@ class CodeClassifierTrainerGPU(object):
 
         if epoch is not None:
             save_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'confusion', 'test')
-            self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=False)
+            precision, recall, f1_score = self.confusion_matrix_plot(labels.clone().detach(), predictions.clone().detach(), save_root=save_path, epoch=epoch, activate=self.cm, save_fig=self.cm_fig)
 
         # Set the model back to training mode.
         self.model.train()
 
         # Return the computed loss and accuracy values.
-        return loss, acc
+        return loss, acc, precision, recall, f1_score
 
     @torch.no_grad()
     def compute_accuracy(self, labels, logits, softmax=nn.Softmax(dim=1)):
@@ -581,7 +696,7 @@ class CodeClassifierTrainerGPU(object):
         else:
             assert '.pth' in save_name
             model_save_file = os.path.join(path, save_name)
-        train_csv_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'code_classifier_learning_curves.csv')
+        train_csv_path = os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), 'region_classifier_learning_curves.csv')
 
         if self.verbose:
             print(path)
@@ -592,11 +707,11 @@ class CodeClassifierTrainerGPU(object):
         with open(train_csv_path, 'w') as f:
             ls = self.losses
             f.write(
-                'Epoch,Training Accuracy,Validation Accuracy,Test Accuracy,Training Loss,Validation Loss,Test Loss\n'
+                'Epoch,Training Accuracy,Validation Accuracy,Test Accuracy,Training Loss,Validation Loss,Test Loss,Training Mean Precision,Validation Mean Precision,Test Mean Precision,Training Mean Recall,Validation Mean Recall,Test Mean Recall,Training Mean F1 Score,Validation Mean F1 Score,Test Mean F1 Score\n'
             )
             for i in range(epoch):
                 f.write(
-                    '{},{},{},{},{},{},{}\n'.format(
+                    '{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
                         ls['epoch'][i],
                         ls['ta'][i],
                         ls['va'][i],
@@ -604,5 +719,14 @@ class CodeClassifierTrainerGPU(object):
                         ls['tl'][i],
                         ls['vl'][i],
                         ls['test_loss'][i],
+                        ls['tp'][i],
+                        ls['vp'][i],
+                        ls['test_precision'][i],
+                        ls['tr'][i],
+                        ls['vr'][i],
+                        ls['test_recall'][i],
+                        ls['tf1'][i],
+                        ls['vf1'][i],
+                        ls['test_f1'][i],
                     )
                 )
