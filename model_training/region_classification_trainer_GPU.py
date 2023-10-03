@@ -58,7 +58,7 @@ class RegionClassifierTrainerGPU(object):
         self.cm = True
 
         # Activates printing confusion matrices each epoch
-        self.cm_fig = True
+        self.cm_fig = False
 
         # CG: CPU or GPU, prioritizes GPU if available.
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
