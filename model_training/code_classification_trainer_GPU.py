@@ -380,14 +380,14 @@ class CodeClassifierTrainerGPU(object):
                     print(f'(New Best Val. Acc., Correspond. Test Acc., Epoch):\n({self.best_val_acc}, {self.test_acc_for_best_val}, {epoch})\n')
                 self.save_model(epoch, save_name='best_model.pth')
                 pd.DataFrame(train_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_train_precision.csv"))
-                pd.DataFrame(train_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_val_precision.csv"))
-                pd.DataFrame(train_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_test_precision.csv"))
-                pd.DataFrame(train_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_train_recall.csv"))
-                pd.DataFrame(train_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_val_recall.csv"))
-                pd.DataFrame(train_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_test_recall.csv"))
-                pd.DataFrame(train_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_train_f1_score.csv"))
-                pd.DataFrame(train_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_val_f1_score.csv"))
-                pd.DataFrame(train_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_test_f1_score.csv"))
+                pd.DataFrame(val_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_val_precision.csv"))
+                pd.DataFrame(test_precision).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_test_precision.csv"))
+                pd.DataFrame(train_recall).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_train_recall.csv"))
+                pd.DataFrame(val_recall).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_val_recall.csv"))
+                pd.DataFrame(test_recall).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_test_recall.csv"))
+                pd.DataFrame(train_f1_score).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_train_f1_score.csv"))
+                pd.DataFrame(val_f1_score).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_val_f1_score.csv"))
+                pd.DataFrame(test_f1_score).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_test_f1_score.csv"))
 
             # If our new loss is best,
             if val_loss <= (best_val_loss - self.early_stop_delta):
