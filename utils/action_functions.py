@@ -8,6 +8,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from tqdm import tqdm
 import cv2
 import numpy as np
+import pandas as pd
 import os
 from pathlib import Path
 import json
@@ -509,12 +510,106 @@ def train_code_classifier(
         code_data = helper_functions.load_code(code_folder_path=code_path, verbose=verbose, stratify_by_stain=stratify_by_stain)
         code_data_composite = code_data_composite + code_data
 
-    # Based on the format of the return result of helper_functions.load_code(),
-    # Extract all the targets of the training samples
-    targets = np.array(list(zip(*code_data_composite))[-1])
+    if stratify_by_stain:
+        # Extract targets
+        targets = list(zip(*code_data_composite))[-1]
+        print('517 targets')
+        print(targets)
+        
+        # Define a dictionary of {code_number: normalized_pixel_intensity_bin_ID}
+        # This denotes the binned intensity of each picture of each code, in a dictionary.
+        norm_stain_label_per_code_dict = dict([(str(code_num), []) for code_num in range(1, len(codes) + 1)])
+        print('520 norm_stain_label_per_code_dict')
+        print(norm_stain_label_per_code_dict)
+        # For each target,
+        for target in targets:
+            # Go to that particular code in the dictionary ([0]) and add the bin ID of the normalized pixel intensity ([1])
+            norm_stain_label_per_code_dict[target.split('_')[0]].append((int(target.split('_')[1],)))
+        print('524 norm_stain_label_per_code_dict')
+        print(norm_stain_label_per_code_dict)
+        
+        # Define a similar dictionary in the format of {code number: ...}
+        # Currently, our labels are a result of binning normalized pixel intensity across all particle images
+        # However, when stratifying, we need a minimum of 2 datapoints.
+        # There may be 2 datapoints at a particular stain level across all codes, but not within one code.
+        # Thus, our stratification will crash.
+
+        # To correct for this, instead of:
+        # pixel intensity -> normalized pixel intensity -> bin of normalized pixel intensity
+        # We can do:
+        # pixel intensity -> normalized pixel intensity -> bin of normalized pixel intensity -> bin-of-bin of normalized pixel intensity
+        # In doing so, we still group similar-stain sampled together in the same class, but in a somewhat more coarse-grain way
+        # while satisfying this >=2 datapoints-per-bin condition
+        code_norm_pixel_intensity_bin_bins = {}
+
+        # For each code,
+        for code_num in range(1, len(codes) + 1):
+            # Get the bins corresponding to normalized pixel intensity, convert to dataframe
+            code_stain_df = pd.DataFrame(norm_stain_label_per_code_dict[str(code_num)])
+            code_stain_df.columns = ['normalized_pixel_intensity_bin']
+
+            # Now get the 'bin-of-bin' of normalized pixel intensity
+            # Here, we force 20 datapoints per bin (min_bin_count)
+            code_stain_df, bin_mappings = helper_functions.guarantee_bin_width_for_bin_count(df=code_stain_df, col_name='normalized_pixel_intensity_bin', min_bin_count=20)
+            #print(code_stain_df.shape)
+            code_stain_dict = code_stain_df.to_dict()
+            
+            # Create a nested dictionary representing a dataframe
+            # Each row of each code has (1) the bin of normalized pixel intensity and (2) the bin-of-bin of normalized pixel intensity
+            code_norm_pixel_intensity_bin_bins[str(code_num)] = code_stain_dict
+            # Save the bin-of-bin data
+            pd.DataFrame({f'code_{code_num}_sample_bin_intervals': bin_mappings.cat.categories}).to_csv(os.path.join(load_data_path, f'code_{code_num}_sample_bin_intervals.csv'), index=False)
+        
+        # Store new targets here
+        # e.g.,
+        # 1_172 (code, normalized_pixel_intensity_bin) -> 1_14(code, normalized_pixel_intensity_bin_of_bin)
+        new_targets = []
+        #print('targets')
+        #print(targets)
+        #print(len(targets))
+        print('540 code_norm_pixel_intensity_bin_bins')
+        print(code_norm_pixel_intensity_bin_bins)
+        # For each target,
+        for target in targets:
+            target_info = target.split('_')
+            # Get the code
+            code = target_info[0]
+            # Get the normalized pixel intensity bin (the old label)
+            norm_pixel_intensity_bin = target_info[1]
+            # For each normalized pixel intensity bin recorded in our dictionary
+            for row, code_norm_pixel_intensity_bin in code_norm_pixel_intensity_bin_bins[code]['normalized_pixel_intensity_bin'].items():
+                # If the current bin noted matches a bin noted in the dictionary
+                if str(code_norm_pixel_intensity_bin) == norm_pixel_intensity_bin:
+                    # Get the corresponding bin-of-bin for the bin noted
+                    target_info[1] = str(code_norm_pixel_intensity_bin_bins[code]['normalized_pixel_intensity_bin_bin'][row])
+                    # Reconstruct the new sample filename, replacing the bin stain label with the bin-of-bin stain label
+                    new_target_info = '_'.join(target_info)
+                    #print((counter, new_target_info))
+                    new_targets.append(new_target_info)
+                    # We are done with this sample, move onto the next one
+                    break
+        #print(code_norm_pixel_intensity_bin_bins[code]['normalized_pixel_intensity_bin'])
+        #print(len(targets))
+        #print(len(new_targets))
+        #print(targets[0])
+        #print(new_targets[0])
+        #print(np.asarray(targets))
+        #print(np.asarray(new_targets))
+        targets = np.asarray(new_targets)
+
+    else:
+        # Based on the format of the return result of helper_functions.load_code(),
+        # Extract all the targets of the training samples
+        targets = np.asarray(list(zip(*code_data_composite))[-1])
+
     # All the samples
     dataset = np.asarray(code_data_composite, dtype=object)
+    dataset[:, -1] = targets.flatten()
 
+    print('571 dataset')
+    print(dataset)
+    print(dataset.shape)
+    
     # Do a straified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
     training_data, test_data = train_test_split(
@@ -523,24 +618,52 @@ def train_code_classifier(
         stratify=targets,
         random_state=random_state,
     )
+    
+    print('584 Training Data')
+    print(training_data)
+    print('586 Test Data')
+    print(test_data)
 
     if stratify_by_stain:
         training_targets_stain = np.asarray(list(zip(*training_data))[-1])
         test_targets_stain = np.asarray(list(zip(*test_data))[-1])
         
+        print('593 training targets stain')
+        print(training_targets_stain)
+        print('595 test targets stain')
+        print(test_targets_stain)
+
+        # Strips stain info
+        # e.g., label '1_100' just becomes a label '1'
+        # We only stratify by stain at the dataloader level
+        # We stratify-by-code within the model during training, which is why we strip this information here
         training_targets = helper_functions.stain_labels_to_training_labels(data=training_targets_stain)
         test_targets = helper_functions.stain_labels_to_training_labels(data=test_targets_stain)
+
+        print('601 training targets')
+        print(training_targets)
+        print('603 test targets')
+        print(test_targets)
 
         for i, new_label in enumerate(training_targets):
             training_data[i, -1] = new_label
 
         for i, new_label in enumerate(test_targets):
             test_data[i, -1] = new_label
+        print('611 training_data')
+        print(training_data)
+        print('612 test data')
+        print(test_data)
+
     else:
         training_targets = np.asarray(list(zip(*training_data))[-1])
         test_targets = np.asarray(list(zip(*test_data))[-1])
         training_targets_stain = training_targets
         test_targets_stain = test_targets
+        print('training targets')
+        print(training_targets)
+        print('test targets')
+        print(test_targets)
 
     # CG: Stratified k-Fold cross-validation
     # Define a class to do the stratified splitting into folds

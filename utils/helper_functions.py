@@ -8,11 +8,13 @@ import json
 # from object_detection import RegionDetector
 import cv2
 import numpy as np
+import pandas as pd
 import os
 import csv
 import itertools
 import re as regex
 from PIL import Image
+from tqdm import tqdm
 
 def normalize_by_reference(
     hologram,
@@ -298,6 +300,7 @@ def load_code(code_folder_path, verbose=True, stratify_by_stain: bool = False):
                 # code {code_num}_{stain_level}_{hologram_num}_{pixelX_position}_{pixelY_position}_{img_length}_{img_width}
                 stain_level = file_name.split('_')[1]
                 label = str(label) + '_' + stain_level
+                print(label)
         except:
             print(
                 '\n\nFAILURE OBTAINING TARGET LABEL FROM SAMPLE FILENAMES.\nThe sample filenames may not have been correctly labelled.'
@@ -333,6 +336,45 @@ def find_intensity(normalized_hologram, particle_locations):
 
     return intensities
 
+def get_particle_intensity(particle_image, zoom_dims=(32,32)):
+    h, w = particle_image.shape
+    x1 = w // 2 - zoom_dims[0]
+    x2 = w // 2 + zoom_dims[0]
+    y1 = h // 2 - zoom_dims[1]
+    y2 = h // 2 + zoom_dims[1]
+    region = particle_image[y1:y2, x1:x2]
+    intensity_estimate = region.mean()
+    return intensity_estimate
+
+def get_particle_intensities(particle_image_list, zoom_dims=(32, 32)):
+    intensity_list = []
+    for particle_image in tqdm(particle_image_list):
+        intensity_estimate = get_particle_intensity(particle_image=particle_image, zoom_dims=zoom_dims)
+        intensity_list.append(intensity_estimate)
+    return intensity_list
+
+# Takes some data within a dataframe, based on some column name (col_name),
+# and puts that data within labelled bins.
+# This is for generating discretized labels of supervised training data
+# Specifically, this function forces all the bins to contain a minimum number of datapoints (min_bin_count)
+def guarantee_bin_width_for_bin_count(df, col_name, min_bin_count=2):
+    # Get the number of bins expected via simple relationship
+    num_bins = len(df) // min_bin_count
+
+    # While the minimum number of datapoints in any given bin is greater than our expected minimum
+    while True:
+        # Keep trying to bin fairly
+        bins = pd.qcut(df[col_name], q=num_bins, duplicates='drop')
+        if bins.value_counts().min() >= min_bin_count:
+            break
+        # Keep reducing the number of bins for a fixed dataset to try and meet the min_bin_count condition
+        num_bins -= 1
+
+    # Assign a label to each bin for each datapoint in the original dataframe
+    df[col_name + '_bin'] = bins.cat.codes.apply(lambda x: x)
+    
+    # Return dataframe with col_name and a newly added label column (col_name_bin)
+    return df, bins
 
 def load_and_normalize(raw_directory, code_list, color=False, one_ref_per_img=True):
     for code in code_list:
