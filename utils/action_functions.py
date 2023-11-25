@@ -550,7 +550,7 @@ def train_code_classifier(
 
             # Now get the 'bin-of-bin' of normalized pixel intensity
             # Here, we force 20 datapoints per bin (min_bin_count)
-            code_stain_df, bin_mappings = helper_functions.guarantee_bin_width_for_bin_count(df=code_stain_df, col_name='normalized_pixel_intensity_bin', min_bin_count=20)
+            code_stain_df, bin_mappings = helper_functions.guarantee_bin_width_for_bin_count(df=code_stain_df, col_name='normalized_pixel_intensity_bin', min_bin_count=5)
             #print(code_stain_df.shape)
             code_stain_dict = code_stain_df.to_dict()
             

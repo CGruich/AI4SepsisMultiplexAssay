@@ -8,8 +8,8 @@ import pandas as pd
 import numpy as np
 
 # Path to training-ready positive/negative samples
-sample_path = '/home/cameron/Dropbox (University of Michigan)/DL_training/data/classifier_training_samples/Protein_Assay_Training_Samples/new_set'
-pos_sample_path = osp.join(sample_path, 'positive')
+sample_path = '/home/cameron/Dropbox (University of Michigan)/DL_training/data/classifier_training_samples/'
+pos_sample_path = osp.join(sample_path, 'positive_CORRECT_LABELS')
 
 # Get positive sample filenames
 pos_code_file_names = os.listdir(pos_sample_path)
@@ -40,7 +40,6 @@ for code_file_name_ind in tqdm(range(len(pos_code_file_names))):
 pos_intensities = helper_functions.get_particle_intensities(particle_image_list=sample_ndarray_list)
 pos_min_intensity = floor(min(pos_intensities))
 pos_max_intensity = ceil(max(pos_intensities))
-bin_width = 200
 
 intensities_df = pd.DataFrame(pos_intensities)
 intensities_df.columns = ['normalized_pixel_intensity']
