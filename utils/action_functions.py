@@ -468,8 +468,10 @@ def train_code_classifier(
     fc_num: int = 2,
     dropout_rate: float = 0.3,
     patience: int = 10,
+    warmup: int = 200,
     # Only used for Bayesian hyperparameter optimization
-    hyper_dict: dict = None
+    hyper_dict: dict = None,
+    bayes_trial = None,
 ):
 
     if pipeline_inputs is not None:
@@ -494,10 +496,12 @@ def train_code_classifier(
         # Hyperparameters
         batch_size = pipeline_inputs.get("batch_size")
         lr = pipeline_inputs.get("lr")
+        weight_decay = pipeline_inputs.get("weight_decay")
         fc_size = pipeline_inputs.get("fc_size")
         fc_num = pipeline_inputs.get("fc_num")
         dropout_rate = pipeline_inputs.get("dropout_rate")
         patience = pipeline_inputs.get("patience")
+        warmup = pipeline_inputs.get("warmup")
         
     if timestamp is None:
         timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
@@ -513,20 +517,20 @@ def train_code_classifier(
     if stratify_by_stain:
         # Extract targets
         targets = list(zip(*code_data_composite))[-1]
-        print('517 targets')
-        print(targets)
+        #print('517 targets')
+        #print(targets)
         
         # Define a dictionary of {code_number: normalized_pixel_intensity_bin_ID}
         # This denotes the binned intensity of each picture of each code, in a dictionary.
         norm_stain_label_per_code_dict = dict([(str(code_num), []) for code_num in range(1, len(codes) + 1)])
-        print('520 norm_stain_label_per_code_dict')
-        print(norm_stain_label_per_code_dict)
+        #print('520 norm_stain_label_per_code_dict')
+        #print(norm_stain_label_per_code_dict)
         # For each target,
         for target in targets:
             # Go to that particular code in the dictionary ([0]) and add the bin ID of the normalized pixel intensity ([1])
             norm_stain_label_per_code_dict[target.split('_')[0]].append((int(target.split('_')[1],)))
-        print('524 norm_stain_label_per_code_dict')
-        print(norm_stain_label_per_code_dict)
+        #print('524 norm_stain_label_per_code_dict')
+        #print(norm_stain_label_per_code_dict)
         
         # Define a similar dictionary in the format of {code number: ...}
         # Currently, our labels are a result of binning normalized pixel intensity across all particle images
@@ -567,8 +571,8 @@ def train_code_classifier(
         #print('targets')
         #print(targets)
         #print(len(targets))
-        print('540 code_norm_pixel_intensity_bin_bins')
-        print(code_norm_pixel_intensity_bin_bins)
+        #print('540 code_norm_pixel_intensity_bin_bins')
+        #print(code_norm_pixel_intensity_bin_bins)
         # For each target,
         for target in targets:
             target_info = target.split('_')
@@ -606,9 +610,9 @@ def train_code_classifier(
     dataset = np.asarray(code_data_composite, dtype=object)
     dataset[:, -1] = targets.flatten()
 
-    print('571 dataset')
-    print(dataset)
-    print(dataset.shape)
+    #print('571 dataset')
+    #print(dataset)
+    #print(dataset.shape)
     
     # Do a straified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
@@ -619,19 +623,19 @@ def train_code_classifier(
         random_state=random_state,
     )
     
-    print('584 Training Data')
-    print(training_data)
-    print('586 Test Data')
-    print(test_data)
+    #print('584 Training Data')
+    #print(training_data)
+    #print('586 Test Data')
+    #print(test_data)
 
     if stratify_by_stain:
         training_targets_stain = np.asarray(list(zip(*training_data))[-1])
         test_targets_stain = np.asarray(list(zip(*test_data))[-1])
         
-        print('593 training targets stain')
-        print(training_targets_stain)
-        print('595 test targets stain')
-        print(test_targets_stain)
+        #print('593 training targets stain')
+        #print(training_targets_stain)
+        #print('595 test targets stain')
+        #print(test_targets_stain)
 
         # Strips stain info
         # e.g., label '1_100' just becomes a label '1'
@@ -640,30 +644,30 @@ def train_code_classifier(
         training_targets = helper_functions.stain_labels_to_training_labels(data=training_targets_stain)
         test_targets = helper_functions.stain_labels_to_training_labels(data=test_targets_stain)
 
-        print('601 training targets')
-        print(training_targets)
-        print('603 test targets')
-        print(test_targets)
+        #print('601 training targets')
+        #print(training_targets)
+        #print('603 test targets')
+        #print(test_targets)
 
         for i, new_label in enumerate(training_targets):
             training_data[i, -1] = new_label
 
         for i, new_label in enumerate(test_targets):
             test_data[i, -1] = new_label
-        print('611 training_data')
-        print(training_data)
-        print('612 test data')
-        print(test_data)
+        #print('611 training_data')
+        #print(training_data)
+        #print('612 test data')
+        #print(test_data)
 
     else:
         training_targets = np.asarray(list(zip(*training_data))[-1])
         test_targets = np.asarray(list(zip(*test_data))[-1])
         training_targets_stain = training_targets
         test_targets_stain = test_targets
-        print('training targets')
-        print(training_targets)
-        print('test targets')
-        print(test_targets)
+        #print('training targets')
+        #print(training_targets)
+        #print('test targets')
+        #print(test_targets)
 
     # CG: Stratified k-Fold cross-validation
     # Define a class to do the stratified splitting into folds
@@ -698,11 +702,13 @@ def train_code_classifier(
                 save_every_n=save_every_n,
                 batch_size=batch_size,
                 lr=lr,
+                weight_decay=weight_decay,
                 fc_size=fc_size,
                 fc_num=fc_num,
                 dropout_rate=dropout_rate,
                 k=fold_index,
                 patience=patience,
+                warmup=warmup,
                 verbose=verbose,
                 log=log,
                 timestamp=timestamp,
@@ -715,6 +721,7 @@ def train_code_classifier(
             fc_size = hyper_dict['fc_size']
             fc_num = hyper_dict['fc_num']
             dropout_rate = hyper_dict['dr']
+            weight_decay = hyper_dict['wd']
 
             trainer = CodeClassifierTrainerGPU(
                 codes=codes,
@@ -722,11 +729,13 @@ def train_code_classifier(
                 save_every_n=save_every_n,
                 batch_size=batch_size,
                 lr=lr,
+                weight_decay=weight_decay,
                 fc_size=fc_size,
                 fc_num=fc_num,
                 dropout_rate=dropout_rate,
                 k=fold_index,
                 patience=patience,
+                warmup=warmup,
                 verbose=verbose,
                 log=log,
                 timestamp=timestamp,
@@ -743,12 +752,25 @@ def train_code_classifier(
             test_targets_np=test_targets
         )
         # Train
-        cross_val_scores = trainer.train(
-            cross_validation=cross_validate,
-            cross_validation_scores=cross_val_scores,
-        )
+        if bayes_trial is not None:
+            cross_val_scores = trainer.train(
+                cross_validation=cross_validate,
+                cross_validation_scores=cross_val_scores,
+            )
+        else:
+            cross_val_scores = trainer.train(
+                cross_validation=cross_validate,
+                cross_validation_scores=cross_val_scores,
+            )
         # Keep track of what k-fold we are on for book-keeping
         fold_index = fold_index + 1
+
+        if bayes_trial is not None:
+            intermediate_accuracy = np.array(cross_val_scores['Val_Acc']).mean()
+            bayes_trial.report(intermediate_accuracy, fold_index)
+
+            if bayes_trial.should_prune():
+                raise optuna.TrialPruned()
 
     # Print out the average cross-validation results
     if pipeline_inputs['verbose']:
@@ -777,7 +799,8 @@ def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):
     else:
         # Create an OpTuna study, maximize the accuracy
         study = optuna.create_study(direction='maximize', 
-                                    sampler=TPESampler(seed=random_state))
+                                    sampler=TPESampler(seed=random_state),
+                                    pruner=optuna.pruners.HyperbandPruner())
 
     # By default, OpTuna objective functions for objective minimization/maximization does not accept custom input variables
     # However, we can easily accomodate custom input variables in this way with some lambda operations,

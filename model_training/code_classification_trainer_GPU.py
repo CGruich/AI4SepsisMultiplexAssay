@@ -41,11 +41,13 @@ class CodeClassifierTrainerGPU(object):
         save_every_n: int = 10,
         batch_size: int = 256,
         lr: float = 1e-5,
+        weight_decay: float = 1e-3,
         fc_size: int = 256,
         fc_num: int = 2,
         dropout_rate: float = 0.1,
         k: int = None,
         patience: int = 10,
+        warmup: int = 200,
         verbose: bool = True,
         log: bool = True,
         timestamp: str = datetime.now().strftime('%m_%d_%y_%H:%M'),
@@ -126,6 +128,8 @@ class CodeClassifierTrainerGPU(object):
 
         self.test_acc_for_best_val = 0
 
+        self.weight_decay = weight_decay
+
         # Store the training, validation, test accuracy and training, validation, test loss
         self.losses = {
             'epoch': [],
@@ -154,10 +158,10 @@ class CodeClassifierTrainerGPU(object):
         self.writer = None
 
         # How many epochs to wait before early-stopping is allowed.
-        self.warmup = 20
+        self.warmup = warmup
 
         # Using the Adam optimizer
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         # Cross Entropy Loss for multi-class problems
         self.loss_fn = nn.CrossEntropyLoss()
         # Current cross-validation fold
@@ -431,7 +435,10 @@ class CodeClassifierTrainerGPU(object):
         :param data: Array of samples to choose from. Either `self.train_data` or `self.val_data`
         :return: Batches of augmented samples and the appropriate labels.
         """
-
+        
+        bs = self.batch_size
+        assert len(data) // bs != 0
+        
         batches = []
         transform_prob = 0.2
 
@@ -439,7 +446,6 @@ class CodeClassifierTrainerGPU(object):
         indices = [i for i in range(len(data))]
         np.random.shuffle(indices)
 
-        bs = self.batch_size
         for i in range(len(data) // bs):
             # Choose our random batch.
             idxs = indices[i * bs : i * bs + bs]
@@ -461,7 +467,7 @@ class CodeClassifierTrainerGPU(object):
             samples = torch.as_tensor(np.array(samples, dtype=np.float32), dtype=torch.float32)
 
             print_images(
-                samples/65535,
+                samples,
                 path='data/classifier_training_samples/Data_Augmentation_Inspection/NoAugment',
                 batch_id=str(i),
                 activate=self.debug,
@@ -487,7 +493,7 @@ class CodeClassifierTrainerGPU(object):
                 )
 
                 print_images(
-                    samples/65535,
+                    samples,
                     path='data/classifier_training_samples/Data_Augmentation_Inspection/Rotations',
                     batch_id=str(i),
                     activate=self.debug,
@@ -498,7 +504,7 @@ class CodeClassifierTrainerGPU(object):
                 samples = tf(samples)
 
                 print_images(
-                    samples/65535,
+                    samples,
                     path='data/classifier_training_samples/Data_Augmentation_Inspection/HorizontalFlip',
                     batch_id=str(i),
                     activate=self.debug,
@@ -509,7 +515,7 @@ class CodeClassifierTrainerGPU(object):
                 samples = tf(samples)
 
                 print_images(
-                    samples/65535,
+                    samples,
                     path='data/classifier_training_samples/Data_Augmentation_Inspection/VerticalFlip',
                     batch_id=str(i),
                     activate=self.debug,
@@ -666,7 +672,7 @@ class CodeClassifierTrainerGPU(object):
         v_regions = torch.as_tensor(np.array(v_regions), dtype=torch.float32)
 
         print_images(
-            v_regions/65535,
+            v_regions,
             path='data/classifier_training_samples/Validation_Dataset/',
             batch_id='val',
             activate=self.debug,
@@ -684,7 +690,7 @@ class CodeClassifierTrainerGPU(object):
         t_regions = torch.as_tensor(np.array(t_regions), dtype=torch.float32)
 
         print_images(
-            t_regions/65535,
+            t_regions,
             path='data/classifier_training_samples/Test_Dataset/',
             batch_id='test',
             activate=self.debug,

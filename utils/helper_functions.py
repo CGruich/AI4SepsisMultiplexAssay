@@ -288,6 +288,7 @@ def load_code(code_folder_path, verbose=True, stratify_by_stain: bool = False):
             continue
 
         # Load region.
+        # Normalize by max possible pixel value
         region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH) / 65535
         try:
             label = int(file_name.split('_')[0].replace('code ', ''))
@@ -300,7 +301,6 @@ def load_code(code_folder_path, verbose=True, stratify_by_stain: bool = False):
                 # code {code_num}_{stain_level}_{hologram_num}_{pixelX_position}_{pixelY_position}_{img_length}_{img_width}
                 stain_level = file_name.split('_')[1]
                 label = str(label) + '_' + stain_level
-                print(label)
         except:
             print(
                 '\n\nFAILURE OBTAINING TARGET LABEL FROM SAMPLE FILENAMES.\nThe sample filenames may not have been correctly labelled.'

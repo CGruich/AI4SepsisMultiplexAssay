@@ -37,6 +37,8 @@ if __name__ == '__main__':
         pipeline_inputs = {}
 
     if action == 'bayesian_optimize_code_classifier':
+        import warnings
+        warnings.filterwarnings("ignore")
         action_functions.bayesian_optimize_code_classifer(pipeline_inputs=pipeline_inputs)
 
     elif action == 'bayesian_optimize_region_classifier':
