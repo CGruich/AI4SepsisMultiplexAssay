@@ -288,7 +288,7 @@ def load_code(code_folder_path, verbose=True, stratify_by_stain: bool = False):
             continue
 
         # Load region.
-        region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH)
+        region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH) / 65535
         try:
             label = int(file_name.split('_')[0].replace('code ', ''))
 
