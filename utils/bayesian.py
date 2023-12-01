@@ -43,21 +43,23 @@ def objective_region_classifier(trial, pipeline_inputs: dict = None):
     # Learning rate
     lr = trial.suggest_float('learning_rate', 1e-8, 1e-2)
     # Batch size
-    bs = trial.suggest_int('batch_size', 128, 1024, 64)
+    bs = trial.suggest_int('batch_size', 20, 200, 10)
     # Fully connected layer size
     fc_size = trial.suggest_int('fully_connected_size', 128, 1024, 64)
     # Number of fully connected layers
     fc_num = trial.suggest_int('fully_connected_layers', 1, 5, 1)
     # Dropout rate
     dr = trial.suggest_float('dropout_rate', 0.0, 0.8)
+    # Weight Decay
+    wd = trial.suggest_float('weight_decay', 0.0, 0.4)
 
     # Dictionary of hyperparameters
-    hyper_dict = {'lr': lr, 'bs': bs, 'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr}
+    hyper_dict = {'lr': lr, 'bs': bs, 'fc_size': fc_size, 'fc_num': fc_num, 'dr': dr, 'wd': wd}
 
     # Run stratified k-fold cross-validation with the hyperparameters
     # Via the pipeline functionality of the workflow,
     cross_val_scores = action_functions.train_region_classifier(
-        pipeline_inputs=pipeline_inputs, timestamp=None, hyper_dict=hyper_dict
+        pipeline_inputs=pipeline_inputs, timestamp=None, hyper_dict=hyper_dict, bayes_trial=trial,
     )
 
     # Average stratified k-fold cross-validation accuracy

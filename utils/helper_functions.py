@@ -197,9 +197,7 @@ def load_data(folder_path: str, verbose: bool = True, stratify_by_stain: bool = 
             continue
 
         # Load region.
-        region = cv2.imread(
-            os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
-        )
+        region = cv2.imread(os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH) / 65535.0
 
         if stratify_by_stain:
             # Follows filename convention:
@@ -224,9 +222,7 @@ def load_data(folder_path: str, verbose: bool = True, stratify_by_stain: bool = 
             continue
 
         # Load region.
-        region = cv2.imread(
-            os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
-        )
+        region = cv2.imread(os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH) / 65535
         
         if stratify_by_stain:
             # Follows filename convention:
@@ -289,7 +285,7 @@ def load_code(code_folder_path, verbose=True, stratify_by_stain: bool = False):
 
         # Load region.
         # Normalize by max possible pixel value
-        region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH) / 65535
+        region = cv2.imread(os.path.join(code_sample_folder, file_name), cv2.IMREAD_ANYDEPTH) / 65535.0
         try:
             label = int(file_name.split('_')[0].replace('code ', ''))
 

@@ -169,8 +169,10 @@ def train_region_classifier(
     fc_num: int = 2,
     dropout_rate: float = 0.3,
     patience: int = 10,
+    warmup: int = 200,
     # Only used for Bayesian hyperparameter optimization
-    hyper_dict: dict = None
+    hyper_dict: dict = None,
+    bayes_trial = None,
 ):
 
     # Set random state if available...
@@ -197,10 +199,12 @@ def train_region_classifier(
         # Hyperparameters
         batch_size = pipeline_inputs.get("batch_size")
         lr = pipeline_inputs.get("lr")
+        weight_decay = pipeline_inputs.get("weight_decay")
         fc_size = pipeline_inputs.get("fc_size")
         fc_num = pipeline_inputs.get("fc_num")
         dropout_rate = pipeline_inputs.get("dropout_rate")
         patience = pipeline_inputs.get("patience")
+        warmup = pipeline_inputs.get("warmup")
 
     if timestamp is None:
         timestamp = datetime.now().strftime('%m_%d_%y_%H:%M')
@@ -208,14 +212,101 @@ def train_region_classifier(
     # Returns list of lists
     data_list = helper_functions.load_data(load_data_path, verbose=verbose, stratify_by_stain=stratify_by_stain)
 
-    # Based on the format of the return result of .load_data(),
-    # Extract all the targets of the training samples
-    targets = np.array(list(zip(*data_list))[-1])
+    if stratify_by_stain:
+        # Based on the format of the return result of .load_data(),
+        # Extract all the targets of the training samples
+        targets = list(zip(*data_list))[-1]
 
+        # Define a dictionary of {code_number: normalized_pixel_intensity_bin_ID}
+        # This denotes the binned intensity of each picture of each code, in a dictionary.
+        norm_stain_label_per_code_dict = dict([(str(code_num), []) for code_num in range(0, 2)])
+        print('520 norm_stain_label_per_code_dict')
+        print(norm_stain_label_per_code_dict)
+        # For each target,
+        for target in targets:
+            # Go to that particular code in the dictionary ([0]) and add the bin ID of the normalized pixel intensity ([1])
+            norm_stain_label_per_code_dict[target.split('_')[0]].append((int(target.split('_')[1],)))
+        print('524 norm_stain_label_per_code_dict')
+        print(norm_stain_label_per_code_dict)
+        
+        # Define a similar dictionary in the format of {code number: ...}
+        # Currently, our labels are a result of binning normalized pixel intensity across all particle images
+        # However, when stratifying, we need a minimum of 2 datapoints.
+        # There may be 2 datapoints at a particular stain level across all codes, but not within one code.
+        # Thus, our stratification will crash.
+
+        # To correct for this, instead of:
+        # pixel intensity -> normalized pixel intensity -> bin of normalized pixel intensity
+        # We can do:
+        # pixel intensity -> normalized pixel intensity -> bin of normalized pixel intensity -> bin-of-bin of normalized pixel intensity
+        # In doing so, we still group similar-stain sampled together in the same class, but in a somewhat more coarse-grain way
+        # while satisfying this >=2 datapoints-per-bin condition
+        code_norm_pixel_intensity_bin_bins = {}
+
+        # For each code,
+        for code_num in range(2):
+            # Get the bins corresponding to normalized pixel intensity, convert to dataframe
+            code_stain_df = pd.DataFrame(norm_stain_label_per_code_dict[str(code_num)])
+            print(code_stain_df)
+            code_stain_df.columns = ['normalized_pixel_intensity_bin']
+
+            # Now get the 'bin-of-bin' of normalized pixel intensity
+            # Here, we force 20 datapoints per bin (min_bin_count)
+            code_stain_df, bin_mappings = helper_functions.guarantee_bin_width_for_bin_count(df=code_stain_df, col_name='normalized_pixel_intensity_bin', min_bin_count=5)
+            #print(code_stain_df.shape)
+            code_stain_dict = code_stain_df.to_dict()
+            
+            # Create a nested dictionary representing a dataframe
+            # Each row of each code has (1) the bin of normalized pixel intensity and (2) the bin-of-bin of normalized pixel intensity
+            code_norm_pixel_intensity_bin_bins[str(code_num)] = code_stain_dict
+            # Save the bin-of-bin data
+            pd.DataFrame({f'code_{code_num}_sample_bin_intervals': bin_mappings.cat.categories}).to_csv(os.path.join(load_data_path, f'region_{code_num}_sample_bin_intervals.csv'), index=False)
+        
+        # Store new targets here
+        # e.g.,
+        # 1_172 (code, normalized_pixel_intensity_bin) -> 1_14(code, normalized_pixel_intensity_bin_of_bin)
+        new_targets = []
+        #print('targets')
+        #print(targets)
+        #print(len(targets))
+        #print('540 code_norm_pixel_intensity_bin_bins')
+        #print(code_norm_pixel_intensity_bin_bins)
+        # For each target,
+        for target in targets:
+            target_info = target.split('_')
+            # Get the code
+            code = target_info[0]
+            # Get the normalized pixel intensity bin (the old label)
+            norm_pixel_intensity_bin = target_info[1]
+            # For each normalized pixel intensity bin recorded in our dictionary
+            for row, code_norm_pixel_intensity_bin in code_norm_pixel_intensity_bin_bins[code]['normalized_pixel_intensity_bin'].items():
+                # If the current bin noted matches a bin noted in the dictionary
+                if str(code_norm_pixel_intensity_bin) == norm_pixel_intensity_bin:
+                    # Get the corresponding bin-of-bin for the bin noted
+                    target_info[1] = str(code_norm_pixel_intensity_bin_bins[code]['normalized_pixel_intensity_bin_bin'][row])
+                    # Reconstruct the new sample filename, replacing the bin stain label with the bin-of-bin stain label
+                    new_target_info = '_'.join(target_info)
+                    #print((counter, new_target_info))
+                    new_targets.append(new_target_info)
+                    # We are done with this sample, move onto the next one
+                    break
+        #print(code_norm_pixel_intensity_bin_bins[code]['normalized_pixel_intensity_bin'])
+        #print(len(targets))
+        #print(len(new_targets))
+        #print(targets[0])
+        #print(new_targets[0])
+        #print(np.asarray(targets))
+        #print(np.asarray(new_targets))
+        targets = np.asarray(new_targets)
+    else:
+        targets = np.asarray(list(zip(*data_list))[-1])
+    
     # All the samples
     dataset = np.asarray(
         data_list, dtype=object
     )
+    dataset[:, -1] = targets.flatten()
+    print(dataset)
 
     # Do a stratified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
@@ -269,11 +360,13 @@ def train_region_classifier(
                 save_every_n=save_every_n,
                 batch_size=batch_size,
                 lr=lr,
+                weight_decay=weight_decay,
                 fc_size=fc_size,
                 fc_num=fc_num,
                 dropout_rate=dropout_rate,
                 k=fold_index,
                 patience=patience,
+                warmup=warmup,
                 verbose=verbose,
                 log=log,
                 timestamp=timestamp,
@@ -286,17 +379,20 @@ def train_region_classifier(
             fc_size = hyper_dict['fc_size']
             fc_num = hyper_dict['fc_num']
             dropout_rate = hyper_dict['dr']
+            weight_decay = hyper_dict['wd']
 
             trainer = RegionClassifierTrainerGPU(
                 model_save_path=model_save_path,
                 save_every_n=save_every_n,
                 batch_size=batch_size,
                 lr=lr,
+                weight_decay=weight_decay,
                 fc_size=fc_size,
                 fc_num=fc_num,
                 dropout_rate=dropout_rate,
                 k=fold_index,
                 patience=patience,
+                warmup=warmup,
                 verbose=verbose,
                 log=log,
                 timestamp=timestamp,
@@ -311,11 +407,26 @@ def train_region_classifier(
             test_targets_np=test_targets,
         )
         # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
-        cross_val_scores = trainer.train(
-            cross_validation=cross_validate, cross_validation_scores=cross_val_scores
-        )
+        # Train
+        if bayes_trial is not None:
+            cross_val_scores = trainer.train(
+                cross_validation=cross_validate,
+                cross_validation_scores=cross_val_scores,
+            )
+        else:
+            cross_val_scores = trainer.train(
+                cross_validation=cross_validate,
+                cross_validation_scores=cross_val_scores,
+            )
         # Keep track of what k-fold we are on for book-keeping
         fold_index = fold_index + 1
+
+        if bayes_trial is not None:
+            intermediate_accuracy = np.array(cross_val_scores['Val_Acc']).mean()
+            bayes_trial.report(intermediate_accuracy, fold_index)
+
+            if bayes_trial.should_prune():
+                raise optuna.TrialPruned()
 
     if pipeline_inputs['verbose']:
         print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
@@ -464,6 +575,7 @@ def train_code_classifier(
     # Hyperparameters
     batch_size: int = 192,
     lr: float = 3e-4,
+    weight_decay: float = 1e-3,
     fc_size: int = 64,
     fc_num: int = 2,
     dropout_rate: float = 0.3,

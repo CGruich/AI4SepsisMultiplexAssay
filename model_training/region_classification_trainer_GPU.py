@@ -40,11 +40,13 @@ class RegionClassifierTrainerGPU(object):
         save_every_n: int = 10,
         batch_size: int = 192,
         lr: float = 3e-4,
+        weight_decay: float = 1e-3,
         fc_size: int = 64,
         fc_num: int = 2,
         dropout_rate: float = 0.3,
         k: int = None,
         patience: int = 10,
+        warmup: int = 200,
         verbose: bool = True,
         log: bool = True,
         timestamp: str = datetime.now().strftime('%m_%d_%y_%H:%M'),
@@ -118,6 +120,9 @@ class RegionClassifierTrainerGPU(object):
         self.test_acc_for_best_val = 0
         self.val_split = 0.2
         self.max_transform_sequence = 10
+
+        self.weight_decay = weight_decay
+
         self.losses = {
             'epoch': [],
             'ta': [],
@@ -154,6 +159,7 @@ class RegionClassifierTrainerGPU(object):
         self.optimizer = optim.Adam(
             self.model.parameters(),
             lr=self.learning_rate,
+            weight_decay=self.weight_decay,
         )
         # Loss function for binary classification problems, cross-entropy
         # Input tensor should be of size (batch_size, 1) with the probabilities of class 1 being the right label for a sample
@@ -423,7 +429,7 @@ class RegionClassifierTrainerGPU(object):
             samples = torch.as_tensor(np.array(samples, dtype=np.float32), dtype=torch.float32)
 
             print_images(
-                samples/65535,
+                samples,
                 path='data/classifier_training_samples/Data_Augmentation_Inspection/NoAugment',
                 batch_id=str(i),
                 activate=self.debug,
@@ -448,7 +454,7 @@ class RegionClassifierTrainerGPU(object):
                     np.array(samples, dtype=np.float32), dtype=torch.float32
                 )
                 print_images(
-                    samples/65535,
+                    samples,
                     path='data/classifier_training_samples/Data_Augmentation_Inspection/Rotations',
                     batch_id=str(i),
                     activate=self.debug,
@@ -458,7 +464,7 @@ class RegionClassifierTrainerGPU(object):
                 tf = transforms.RandomHorizontalFlip()
                 samples = tf(samples)
                 print_images(
-                    samples/65535,
+                    samples,
                     path='data/classifier_training_samples/Data_Augmentation_Inspection/HorizontalFlip',
                     batch_id=str(i),
                     activate=self.debug,
@@ -468,7 +474,7 @@ class RegionClassifierTrainerGPU(object):
                 tf = transforms.RandomVerticalFlip()
                 samples = tf(samples)
                 print_images(
-                    samples/65535,
+                    samples,
                     path='data/classifier_training_samples/Data_Augmentation_Inspection/VerticalFlip',
                     batch_id=str(i),
                     activate=self.debug,
