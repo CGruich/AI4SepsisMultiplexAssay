@@ -290,7 +290,6 @@ def train_region_classifier(
         data_list, dtype=object
     )
     dataset[:, -1] = targets.flatten()
-    print(dataset)
 
     # Do a stratified train/test split of all samples into training and test datasets
     # Returns the actual samples, not the indices of the samples.
