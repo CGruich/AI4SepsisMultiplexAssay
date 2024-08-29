@@ -53,6 +53,8 @@ class RegionClassifierTrainerGPU(object):
     ):
         # Prints out augmented images if set to true
         self.debug = False
+        # Prints out training/validation/test datasets used to initialize training of the model
+        self.print_datasets = True
 
         # Printing verbosity
         self.verbose = verbose
@@ -529,7 +531,7 @@ class RegionClassifierTrainerGPU(object):
 
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
-        loss = self.loss_fn(predictions[:, 1:2].to(torch.float32), labels.to(torch.float32)).item()
+        loss = self.loss_fn(predictions[:, 1:2].to(torch.float32), labels.unsqueeze(1).to(torch.float32)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
 
         if epoch is not None:
@@ -560,7 +562,7 @@ class RegionClassifierTrainerGPU(object):
 
         # Compute loss and accuracy of model on the generated batch.
         predictions = self.model.forward(samples)
-        loss = self.loss_fn(predictions[:, 1:2].to(torch.float32), labels.to(torch.float32)).item()
+        loss = self.loss_fn(predictions[:, 1:2].to(torch.float32), labels.unsqueeze(1).to(torch.float32)).item()
         acc = self.compute_accuracy(labels.clone().detach(), predictions.clone().detach())
 
         if epoch is not None:
