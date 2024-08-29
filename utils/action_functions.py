@@ -317,108 +317,226 @@ def train_region_classifier(
         training_targets_stain = training_targets
         test_targets_stain = test_targets
 
-    # CG: Stratified k-Fold cross-validation
-    # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
-    splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state)
-
     training_data_idx = np.arange(len(training_data))
-    cross_val_scores = {
-        'Val_Loss': [],
-        'Val_Acc': [],
-        'Test_Loss': [],
-        'Test_Acc': [],
-    }
-    fold_index = 1
-    # For each fold, define training data indices and validation data indices from the input training dataset
-    for fold, (train_idx, val_idx) in enumerate(
-        splits.split(training_data_idx, y=training_targets_stain)
-    ):
-        if verbose:
-            print('\n\nFold {}'.format(fold + 1))
+    
+    if cross_validate:
+        # CG: Stratified k-Fold cross-validation
+        # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
+        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state)    
         
-        if hyper_dict is None:
-            # Define a region classifier
-            trainer = RegionClassifierTrainerGPU(
-                model_save_path=model_save_path,
-                save_every_n=save_every_n,
-                batch_size=batch_size,
-                lr=lr,
-                weight_decay=weight_decay,
-                fc_size=fc_size,
-                fc_num=fc_num,
-                dropout_rate=dropout_rate,
-                k=fold_index,
-                patience=patience,
-                warmup=warmup,
-                verbose=verbose,
-                log=log,
-                timestamp=timestamp,
+        cross_val_scores = {
+            'Val_Loss': [],
+            'Val_Acc': [],
+            'Test_Loss': [],
+            'Test_Acc': [],
+        }
+        fold_index = 1
+        # For each fold, define training data indices and validation data indices from the input training dataset
+        for fold, (train_idx, val_idx) in enumerate(
+            splits.split(training_data_idx, y=training_targets_stain)
+        ):
+            if verbose:
+                print('\n\nFold {}'.format(fold + 1))
+            
+            if hyper_dict is None:
+                # Define a region classifier
+                trainer = RegionClassifierTrainerGPU(
+                    model_save_path=model_save_path,
+                    save_every_n=save_every_n,
+                    batch_size=batch_size,
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    fc_size=fc_size,
+                    fc_num=fc_num,
+                    dropout_rate=dropout_rate,
+                    k=fold_index,
+                    patience=patience,
+                    warmup=warmup,
+                    verbose=verbose,
+                    log=log,
+                    timestamp=timestamp,
+                )
+            # Else, if we are Bayesian optimizing
+            else:
+                # CG: I avoid using .get() here because the hyperparameter dictionary should be strictly and completely specified with values
+                batch_size = hyper_dict['bs']
+                lr = hyper_dict['lr']
+                fc_size = hyper_dict['fc_size']
+                fc_num = hyper_dict['fc_num']
+                dropout_rate = hyper_dict['dr']
+                weight_decay = hyper_dict['wd']
+
+                trainer = RegionClassifierTrainerGPU(
+                    model_save_path=model_save_path,
+                    save_every_n=save_every_n,
+                    batch_size=batch_size,
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    fc_size=fc_size,
+                    fc_num=fc_num,
+                    dropout_rate=dropout_rate,
+                    k=fold_index,
+                    patience=patience,
+                    warmup=warmup,
+                    verbose=verbose,
+                    log=log,
+                    timestamp=timestamp,
+                )
+
+            trainer.load_data(
+                training_data,
+                training_targets,
+                train_idx,
+                val_idx,
+                test_dataset_np=test_data,
+                test_targets_np=test_targets,
             )
-        # Else, if we are Bayesian optimizing
-        else:
-            # CG: I avoid using .get() here because the hyperparameter dictionary should be strictly and completely specified with values
-            batch_size = hyper_dict['bs']
-            lr = hyper_dict['lr']
-            fc_size = hyper_dict['fc_size']
-            fc_num = hyper_dict['fc_num']
-            dropout_rate = hyper_dict['dr']
-            weight_decay = hyper_dict['wd']
+            # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
+            # Train
+            if bayes_trial is not None:
+                cross_val_scores = trainer.train(
+                    cross_validation=cross_validate,
+                    cross_validation_scores=cross_val_scores,
+                )
+            else:
+                cross_val_scores = trainer.train(
+                    cross_validation=cross_validate,
+                    cross_validation_scores=cross_val_scores,
+                )
 
-            trainer = RegionClassifierTrainerGPU(
-                model_save_path=model_save_path,
-                save_every_n=save_every_n,
-                batch_size=batch_size,
-                lr=lr,
-                weight_decay=weight_decay,
-                fc_size=fc_size,
-                fc_num=fc_num,
-                dropout_rate=dropout_rate,
-                k=fold_index,
-                patience=patience,
-                warmup=warmup,
-                verbose=verbose,
-                log=log,
-                timestamp=timestamp,
+
+            if bayes_trial is not None:
+                intermediate_accuracy = np.array(cross_val_scores['Val_Acc']).mean()
+                bayes_trial.report(intermediate_accuracy, fold_index)
+
+                if bayes_trial.should_prune():
+                    raise optuna.TrialPruned()
+
+            # Break training after first fold to simulate a single train/validation/test split without cross-validation.
+            if fold_index == 1:
+                print('\nTRAINING COMPLETE. Stopping training after first k-fold because cross-validation was set to off.')
+                break
+            # Keep track of what k-fold we are on for book-keeping
+            fold_index = fold_index + 1
+        
+        if pipeline_inputs['verbose']:
+            print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
+            print(cross_val_scores)
+            # Average cross-validation scores
+            for key, value in cross_val_scores.items():
+                print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
+        return cross_val_scores
+    # In the case for this project where we are not k-fold cross-validating,
+    # then just use a training/validating/test dataset.
+
+    # We will do this by recycling the k-fold cross-validation code but stopping training after the first fold
+    # to simulate a single train/validation/test split without cross-validation.
+    else:
+        # CG: Stratified k-Fold cross-validation
+        # Object for stratified k-fold cross-validation splitting of training dataset into a new training dataset and validation dataset
+        splits = StratifiedKFold(n_splits=k, shuffle=True, random_state=random_state)    
+        
+        cross_val_scores = {
+            'Val_Loss': [],
+            'Val_Acc': [],
+            'Test_Loss': [],
+            'Test_Acc': [],
+        }
+        fold_index = 1
+        # For each fold, define training data indices and validation data indices from the input training dataset
+        for fold, (train_idx, val_idx) in enumerate(
+            splits.split(training_data_idx, y=training_targets_stain)
+        ):
+            if verbose:
+                print('\n\nFold {}'.format(fold + 1))
+            
+            if hyper_dict is None:
+                # Define a region classifier
+                trainer = RegionClassifierTrainerGPU(
+                    model_save_path=model_save_path,
+                    save_every_n=save_every_n,
+                    batch_size=batch_size,
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    fc_size=fc_size,
+                    fc_num=fc_num,
+                    dropout_rate=dropout_rate,
+                    k=fold_index,
+                    patience=patience,
+                    warmup=warmup,
+                    verbose=verbose,
+                    log=log,
+                    timestamp=timestamp,
+                )
+            # Else, if we are Bayesian optimizing
+            else:
+                # CG: I avoid using .get() here because the hyperparameter dictionary should be strictly and completely specified with values
+                batch_size = hyper_dict['bs']
+                lr = hyper_dict['lr']
+                fc_size = hyper_dict['fc_size']
+                fc_num = hyper_dict['fc_num']
+                dropout_rate = hyper_dict['dr']
+                weight_decay = hyper_dict['wd']
+
+                trainer = RegionClassifierTrainerGPU(
+                    model_save_path=model_save_path,
+                    save_every_n=save_every_n,
+                    batch_size=batch_size,
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    fc_size=fc_size,
+                    fc_num=fc_num,
+                    dropout_rate=dropout_rate,
+                    k=fold_index,
+                    patience=patience,
+                    warmup=warmup,
+                    verbose=verbose,
+                    log=log,
+                    timestamp=timestamp,
+                )
+
+            trainer.load_data(
+                training_data,
+                training_targets,
+                train_idx,
+                val_idx,
+                test_dataset_np=test_data,
+                test_targets_np=test_targets,
             )
+            # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
+            # Train
+            if bayes_trial is not None:
+                cross_val_scores = trainer.train(
+                    cross_validation=not cross_validate,
+                    cross_validation_scores=cross_val_scores,
+                )
+            else:
+                cross_val_scores = trainer.train(
+                    cross_validation=not cross_validate,
+                    cross_validation_scores=cross_val_scores,
+                )
+            # Keep track of what k-fold we are on for book-keeping
+            fold_index = fold_index + 1
 
-        trainer.load_data(
-            training_data,
-            training_targets,
-            train_idx,
-            val_idx,
-            test_dataset_np=test_data,
-            test_targets_np=test_targets,
-        )
-        # Cross-validation is coded into the trainer, which will add and return cross-validation scores for each fold
-        # Train
-        if bayes_trial is not None:
-            cross_val_scores = trainer.train(
-                cross_validation=cross_validate,
-                cross_validation_scores=cross_val_scores,
-            )
-        else:
-            cross_val_scores = trainer.train(
-                cross_validation=cross_validate,
-                cross_validation_scores=cross_val_scores,
-            )
-        # Keep track of what k-fold we are on for book-keeping
-        fold_index = fold_index + 1
+            if bayes_trial is not None:
+                intermediate_accuracy = np.array(cross_val_scores['Val_Acc']).mean()
+                bayes_trial.report(intermediate_accuracy, fold_index)
 
-        if bayes_trial is not None:
-            intermediate_accuracy = np.array(cross_val_scores['Val_Acc']).mean()
-            bayes_trial.report(intermediate_accuracy, fold_index)
+                if bayes_trial.should_prune():
+                    raise optuna.TrialPruned()
 
-            if bayes_trial.should_prune():
-                raise optuna.TrialPruned()
+            # Break training after first fold to simulate a single train/validation/test split without cross-validation.
+            if fold == 0:
+                print('\nTRAINING COMPLETE. Stopping training after first k-fold because cross-validation was set to off.')
+                break
 
-    if pipeline_inputs['verbose']:
-        print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
-        print(cross_val_scores)
-        # Average cross-validation scores
-        for key, value in cross_val_scores.items():
-            print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
-    return cross_val_scores
-
+        if pipeline_inputs['verbose']:
+            print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
+            print(cross_val_scores)
+            # Average cross-validation scores
+            for key, value in cross_val_scores.items():
+                print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
+        return cross_val_scores
 
 def classify_regions(pipeline_inputs: dict = None):
     assert pipeline_inputs is not None
@@ -722,116 +840,240 @@ def train_code_classifier(
         training_targets_stain = training_targets
         test_targets_stain = test_targets
 
-    # CG: Stratified k-Fold cross-validation
-    # Define a class to do the stratified splitting into folds
-    splits = StratifiedKFold(
-        n_splits=k,
-        shuffle=True,
-        random_state=random_state,
-    )
-
     # Get the indices of the training dataset
     training_data_idx = np.arange(len(training_data))
-    # Dictionary to hold cross-validation scores
-    cross_val_scores = {
-        'Val_Loss': [],
-        'Val_Acc': [],
-        'Test_Loss': [],
-        'Test_Acc': [],
-    }
-    fold_index = 1
-    # For each fold in the training dataset, define a new training dataset and validation dataset based off the training targets
-    for fold, (train_idx, val_idx) in enumerate(
-        splits.split(training_data_idx, y=training_targets_stain)
-    ):
-        if verbose:
-            print('\n\nFold {}'.format(fold + 1))
-        # Define a code classifier
-        # If we are not Bayesian optimizing,
-        if hyper_dict is None:
-            trainer = CodeClassifierTrainerGPU(
-                codes=codes,
-                model_save_path=model_save_path,
-                save_every_n=save_every_n,
-                batch_size=batch_size,
-                lr=lr,
-                weight_decay=weight_decay,
-                fc_size=fc_size,
-                fc_num=fc_num,
-                dropout_rate=dropout_rate,
-                k=fold_index,
-                patience=patience,
-                warmup=warmup,
-                verbose=verbose,
-                log=log,
-                timestamp=timestamp,
-            )
-        # Else, if we are Bayesian optimizing,
-        else:
-            # CG: I avoid using .get() here because the hyperparameter dictionary should be strictly and completely specified with values
-            batch_size = hyper_dict['bs']
-            lr = hyper_dict['lr']
-            fc_size = hyper_dict['fc_size']
-            fc_num = hyper_dict['fc_num']
-            dropout_rate = hyper_dict['dr']
-            weight_decay = hyper_dict['wd']
 
-            trainer = CodeClassifierTrainerGPU(
-                codes=codes,
-                model_save_path=model_save_path,
-                save_every_n=save_every_n,
-                batch_size=batch_size,
-                lr=lr,
-                weight_decay=weight_decay,
-                fc_size=fc_size,
-                fc_num=fc_num,
-                dropout_rate=dropout_rate,
-                k=fold_index,
-                patience=patience,
-                warmup=warmup,
-                verbose=verbose,
-                log=log,
-                timestamp=timestamp,
-            )
-        # Load code classifier training data and validation data
-        # Validation data is taken from the training dataset and targets (training_data, training_targets)
-        # Test dataset and test targets are inputted separately
-        trainer.load_data(
-            training_data,
-            training_targets,
-            train_idx,
-            val_idx,
-            test_dataset_np=test_data,
-            test_targets_np=test_targets
+    # If k-fold cross-validating,
+    if cross_validate:
+        print('CROSS-VALIDATING...')
+        # CG: Stratified k-Fold cross-validation
+        # Define a class to do the stratified splitting into folds
+        splits = StratifiedKFold(
+            n_splits=k,
+            shuffle=True,
+            random_state=random_state,
         )
-        # Train
-        if bayes_trial is not None:
-            cross_val_scores = trainer.train(
-                cross_validation=cross_validate,
-                cross_validation_scores=cross_val_scores,
+
+        # Dictionary to hold cross-validation scores
+        cross_val_scores = {
+            'Val_Loss': [],
+            'Val_Acc': [],
+            'Test_Loss': [],
+            'Test_Acc': [],
+        }
+        fold_index = 1
+        # For each fold in the training dataset, define a new training dataset and validation dataset based off the training targets
+        for fold, (train_idx, val_idx) in enumerate(
+            splits.split(training_data_idx, y=training_targets_stain)
+        ):
+            if verbose:
+                print('\n\nFold {}'.format(fold + 1))
+            # Define a code classifier
+            # If we are not Bayesian optimizing,
+            if hyper_dict is None:
+                trainer = CodeClassifierTrainerGPU(
+                    codes=codes,
+                    model_save_path=model_save_path,
+                    save_every_n=save_every_n,
+                    batch_size=batch_size,
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    fc_size=fc_size,
+                    fc_num=fc_num,
+                    dropout_rate=dropout_rate,
+                    k=fold_index,
+                    patience=patience,
+                    warmup=warmup,
+                    verbose=verbose,
+                    log=log,
+                    timestamp=timestamp,
+                )
+            # Else, if we are Bayesian optimizing,
+            else:
+                # CG: I avoid using .get() here because the hyperparameter dictionary should be strictly and completely specified with values
+                batch_size = hyper_dict['bs']
+                lr = hyper_dict['lr']
+                fc_size = hyper_dict['fc_size']
+                fc_num = hyper_dict['fc_num']
+                dropout_rate = hyper_dict['dr']
+                weight_decay = hyper_dict['wd']
+
+                trainer = CodeClassifierTrainerGPU(
+                    codes=codes,
+                    model_save_path=model_save_path,
+                    save_every_n=save_every_n,
+                    batch_size=batch_size,
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    fc_size=fc_size,
+                    fc_num=fc_num,
+                    dropout_rate=dropout_rate,
+                    k=fold_index,
+                    patience=patience,
+                    warmup=warmup,
+                    verbose=verbose,
+                    log=log,
+                    timestamp=timestamp,
+                )
+            # Load code classifier training data and validation data
+            # Validation data is taken from the training dataset and targets (training_data, training_targets)
+            # Test dataset and test targets are inputted separately
+            trainer.load_data(
+                training_data,
+                training_targets,
+                train_idx,
+                val_idx,
+                test_dataset_np=test_data,
+                test_targets_np=test_targets
             )
-        else:
-            cross_val_scores = trainer.train(
-                cross_validation=cross_validate,
-                cross_validation_scores=cross_val_scores,
+            # Train
+            if bayes_trial is not None:
+                cross_val_scores = trainer.train(
+                    cross_validation=cross_validate,
+                    cross_validation_scores=cross_val_scores,
+                )
+            else:
+                cross_val_scores = trainer.train(
+                    cross_validation=cross_validate,
+                    cross_validation_scores=cross_val_scores,
+                )
+            # Keep track of what k-fold we are on for book-keeping
+            fold_index = fold_index + 1
+
+            if bayes_trial is not None:
+                intermediate_accuracy = np.array(cross_val_scores['Val_Acc']).mean()
+                bayes_trial.report(intermediate_accuracy, fold_index)
+
+                if bayes_trial.should_prune():
+                    raise optuna.TrialPruned()
+
+        # Print out the average cross-validation results
+        if pipeline_inputs['verbose']:
+            print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
+            print(cross_val_scores)
+            for key, value in cross_val_scores.items():
+                print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
+        return cross_val_scores
+    # In the case for this project where we are not k-fold cross-validating,
+    # then just use a training/validating/test dataset.
+    # We will do this by recycling the k-fold cross-validation code but stopping training after the first fold
+    # to simulate a single train/validation/test split without cross-validation.
+    else:
+        print('CROSS-VALIDATION DISABLED...')
+        # CG: Stratified k-Fold cross-validation
+        # Define a class to do the stratified splitting into folds
+        splits = StratifiedKFold(
+            n_splits=k,
+            shuffle=True,
+            random_state=random_state,
+        )
+
+        # Dictionary to hold cross-validation scores
+        cross_val_scores = {
+            'Val_Loss': [],
+            'Val_Acc': [],
+            'Test_Loss': [],
+            'Test_Acc': [],
+        }
+        fold_index = 1
+        # For each fold in the training dataset, define a new training dataset and validation dataset based off the training targets
+        for fold, (train_idx, val_idx) in enumerate(
+            splits.split(training_data_idx, y=training_targets_stain)
+        ):
+            if verbose:
+                print('\n\nFold {}'.format(fold + 1))
+            # Define a code classifier
+            # If we are not Bayesian optimizing,
+            if hyper_dict is None:
+                trainer = CodeClassifierTrainerGPU(
+                    codes=codes,
+                    model_save_path=model_save_path,
+                    save_every_n=save_every_n,
+                    batch_size=batch_size,
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    fc_size=fc_size,
+                    fc_num=fc_num,
+                    dropout_rate=dropout_rate,
+                    k=fold_index,
+                    patience=patience,
+                    warmup=warmup,
+                    verbose=verbose,
+                    log=log,
+                    timestamp=timestamp,
+                )
+            # Else, if we are Bayesian optimizing,
+            else:
+                # CG: I avoid using .get() here because the hyperparameter dictionary should be strictly and completely specified with values
+                batch_size = hyper_dict['bs']
+                lr = hyper_dict['lr']
+                fc_size = hyper_dict['fc_size']
+                fc_num = hyper_dict['fc_num']
+                dropout_rate = hyper_dict['dr']
+                weight_decay = hyper_dict['wd']
+
+                trainer = CodeClassifierTrainerGPU(
+                    codes=codes,
+                    model_save_path=model_save_path,
+                    save_every_n=save_every_n,
+                    batch_size=batch_size,
+                    lr=lr,
+                    weight_decay=weight_decay,
+                    fc_size=fc_size,
+                    fc_num=fc_num,
+                    dropout_rate=dropout_rate,
+                    k=fold_index,
+                    patience=patience,
+                    warmup=warmup,
+                    verbose=verbose,
+                    log=log,
+                    timestamp=timestamp,
+                )
+            # Load code classifier training data and validation data
+            # Validation data is taken from the training dataset and targets (training_data, training_targets)
+            # Test dataset and test targets are inputted separately
+            trainer.load_data(
+                training_data,
+                training_targets,
+                train_idx,
+                val_idx,
+                test_dataset_np=test_data,
+                test_targets_np=test_targets
             )
-        # Keep track of what k-fold we are on for book-keeping
-        fold_index = fold_index + 1
+            # Train
+            if bayes_trial is not None:
+                cross_val_scores = trainer.train(
+                    cross_validation=not cross_validate,
+                    cross_validation_scores=cross_val_scores,
+                )
+            else:
+                cross_val_scores = trainer.train(
+                    cross_validation=not cross_validate,
+                    cross_validation_scores=cross_val_scores,
+                )
 
-        if bayes_trial is not None:
-            intermediate_accuracy = np.array(cross_val_scores['Val_Acc']).mean()
-            bayes_trial.report(intermediate_accuracy, fold_index)
+            if bayes_trial is not None:
+                intermediate_accuracy = np.array(cross_val_scores['Val_Acc']).mean()
+                bayes_trial.report(intermediate_accuracy, fold_index)
 
-            if bayes_trial.should_prune():
-                raise optuna.TrialPruned()
+                if bayes_trial.should_prune():
+                    raise optuna.TrialPruned()
+        
+            # Break training after first fold to simulate a single train/validation/test split without cross-validation.
+            if fold_index == 1:
+                print('\nTRAINING COMPLETE. Stopping training after first k-fold because cross-validation was set to off.')
+                break
 
-    # Print out the average cross-validation results
-    if pipeline_inputs['verbose']:
-        print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
-        print(cross_val_scores)
-        for key, value in cross_val_scores.items():
-            print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
-    return cross_val_scores
+            # Keep track of what k-fold we are on for book-keeping
+            fold_index = fold_index + 1
+        # Print out the average cross-validation results
+        if pipeline_inputs['verbose']:
+            print('\nTRAINING COMPLETE.\nCross-Validation Dictionary:')
+            print(cross_val_scores)
+            for key, value in cross_val_scores.items():
+                print('Avg. ' + str(key) + ': ' + str(np.array(value).mean()))
+        return cross_val_scores
+
 
 
 def bayesian_optimize_code_classifer(pipeline_inputs: dict = None):

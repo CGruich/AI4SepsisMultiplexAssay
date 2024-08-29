@@ -614,26 +614,41 @@ class RegionClassifierTrainerGPU(object):
         assert test_dataset_np is not None
 
         self.train_data = np.take(train_dataset_np, train_idx, axis=0)
+        train_targets = np.take(train_targets_np, train_idx, axis=0)
+
+        # Setting up training dataset
+        tr_labels = []
+        tr_regions = []
+        for region, label in zip(self.train_data, train_targets):
+            tr_labels.append(label)
+            tr_regions.append(np.array(region[0][0], dtype=np.float32))
+        tr_labels = torch.as_tensor(np.array(tr_labels, dtype=np.int32), dtype=torch.int32)
+        tr_regions = torch.as_tensor(np.array(tr_regions), dtype=torch.float32)
+
+        print_images(
+            tr_regions,
+            path='data/classifier_training_samples/Region_Detector_Training_Dataset/',
+            batch_id='train',
+            activate=self.print_datasets,
+        )
+
         val_data = np.take(train_dataset_np, val_idx, axis=0)
         val_targets = np.take(train_targets_np, val_idx, axis=0)
 
         # Setting up validation dataset
         v_labels = []
         v_regions = []
-        
         for region, label in zip(val_data, val_targets):
-
             v_labels.append(label)
             v_regions.append(np.array(region[0][0], dtype=np.float32))
-
-        v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.int32).unsqueeze(dim=-1)
+        v_labels = torch.as_tensor(np.array(v_labels, dtype=np.int32), dtype=torch.int32)
         v_regions = torch.as_tensor(np.array(v_regions), dtype=torch.float32)
 
         print_images(
-            v_regions/65535,
-            path='data/classifier_training_samples/Validation_Dataset/',
+            v_regions,
+            path='data/classifier_training_samples/Region_Detector_Validation_Dataset/',
             batch_id='val',
-            activate=self.debug,
+            activate=self.print_datasets,
         )
 
         self.val_data = (v_regions, v_labels)
@@ -644,14 +659,14 @@ class RegionClassifierTrainerGPU(object):
         for region, label in zip(test_dataset_np, test_targets_np):
             t_labels.append(label)
             t_regions.append(np.array(region[0][0], dtype=np.float32))
-        t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.int32).unsqueeze(dim=-1)
+        t_labels = torch.as_tensor(np.array(t_labels, dtype=np.int32), dtype=torch.int32)
         t_regions = torch.as_tensor(np.array(t_regions), dtype=torch.float32)
 
         print_images(
-            t_regions/65535,
-            path='data/classifier_training_samples/Test_Dataset/',
+            t_regions,
+            path='data/classifier_training_samples/Region_Detector_Test_Dataset/',
             batch_id='test',
-            activate=self.debug,
+            activate=self.print_datasets,
         )
 
         self.test_data = (t_regions, t_labels)

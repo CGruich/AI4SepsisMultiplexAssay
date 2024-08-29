@@ -55,6 +55,9 @@ class CodeClassifierTrainerGPU(object):
         # Prints out augmented images if set to true
         self.debug = False
 
+        # Prints out original datasets fed into the model training before augmentation
+        self.print_datasets = True
+
         # Printing verbosity
         self.verbose = verbose
 
@@ -292,11 +295,15 @@ class CodeClassifierTrainerGPU(object):
                 train_recall /= len(batches)
                 train_f1_score /= len(batches)
 
+            #if self.val_data != None:
             val_loss, val_acc, val_precision, val_recall, val_f1_score = self.validate(epoch=epoch)
             # Correct for undefined results
             val_precision[np.isnan(val_precision)] = 0
             val_recall[np.isnan(val_recall)] = 0
             val_f1_score[np.isnan(val_f1_score)] = 0
+            #else:
+            #    # Placeholder value if not using validation dataset
+            #    val_loss, val_acc, val_precision, val_recall, val_f1_score = 0
 
             test_loss, test_acc, test_precision, test_recall, test_f1_score = self.test(epoch=epoch)
             # Correct for undefined results
@@ -377,6 +384,7 @@ class CodeClassifierTrainerGPU(object):
             self.losses['epoch'].append(epoch)
 
             # If enough epochs have passed that we need to save the model, do so.
+            #if self.val_data != None:
             if val_acc > self.best_val_acc:
                 self.best_val_acc = val_acc
                 self.test_acc_for_best_val = test_acc
@@ -393,6 +401,8 @@ class CodeClassifierTrainerGPU(object):
                 pd.DataFrame(val_f1_score).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_val_f1_score.csv"))
                 pd.DataFrame(test_f1_score).to_csv(os.path.join(self.model_save_path, self.log_timestamp, "fold_" + str(self.k), "best_model_test_f1_score.csv"))
 
+            # If using a validation dataset for early-stopping,
+            #if self.val_data != None:
             # If our new loss is best,
             if val_loss <= (best_val_loss - self.early_stop_delta):
                 # Update the best loss with the new loss
@@ -408,7 +418,6 @@ class CodeClassifierTrainerGPU(object):
                 if epoch > warmup:
                     # Lower the patience of how long to wait for the model accuracy to improve
                     patience -= 1
-
             if patience == 0 and epoch > warmup:
                 break
 
@@ -659,6 +668,24 @@ class CodeClassifierTrainerGPU(object):
         assert test_dataset_np is not None
 
         self.train_data = np.take(train_dataset_np, train_idx, axis=0)
+        train_targets = np.take(train_targets_np, train_idx, axis=0)
+
+        # Setting up training dataset
+        tr_labels = []
+        tr_regions = []
+        for region, label in zip(self.train_data, train_targets):
+            tr_labels.append(label)
+            tr_regions.append(np.array(region[0][0], dtype=np.float32))
+        tr_labels = torch.as_tensor(np.array(tr_labels, dtype=np.int32), dtype=torch.int32)
+        tr_regions = torch.as_tensor(np.array(tr_regions), dtype=torch.float32)
+
+        print_images(
+            tr_regions,
+            path='data/classifier_training_samples/Particle_Detector_Training_Dataset/',
+            batch_id='train',
+            activate=self.print_datasets,
+        )
+
         val_data = np.take(train_dataset_np, val_idx, axis=0)
         val_targets = np.take(train_targets_np, val_idx, axis=0)
 
@@ -673,9 +700,9 @@ class CodeClassifierTrainerGPU(object):
 
         print_images(
             v_regions,
-            path='data/classifier_training_samples/Validation_Dataset/',
+            path='data/classifier_training_samples/Particle_Detector_Validation_Dataset/',
             batch_id='val',
-            activate=self.debug,
+            activate=self.print_datasets,
         )
 
         self.val_data = (v_regions, v_labels)
@@ -691,9 +718,9 @@ class CodeClassifierTrainerGPU(object):
 
         print_images(
             t_regions,
-            path='data/classifier_training_samples/Test_Dataset/',
+            path='data/classifier_training_samples/Particle_Detector_Test_Dataset/',
             batch_id='test',
-            activate=self.debug,
+            activate=self.print_datasets,
         )
 
         self.test_data = (t_regions, t_labels)
