@@ -7,14 +7,11 @@ ___
 
 # Table of Contents
 * [Datasets/Results](docs/data.md) - Datasets used in the study as well as the final training results.
+* [Notebooks](docs/notebooks.md) - Notebooks used in the study to train the models as well as perform the Bayesian hyperparameter search for the models.
 ___
 
-# Installation
+# Environment Installation
 
-FILL
-___
-
-# Reproducible Notebook Demonstrations
 FILL
 ___
 
