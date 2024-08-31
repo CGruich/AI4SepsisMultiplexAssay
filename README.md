@@ -20,6 +20,7 @@ ___
 # Table of Contents
 * [Datasets/Results](docs/data.md) - Datasets used in the study as well as the final training results.
 * [Notebooks](docs/notebooks.md) - Notebooks used in the study to train and evaluate the models, including the Bayesian hyperparameter search for the models.
+* [Library](docs/library.md) - A brief description of the underlying code library .py files used to facilitate training in the Jupyter notebooks.
 ___
 
 # Environment Installation
