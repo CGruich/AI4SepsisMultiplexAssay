@@ -1,0 +1,314 @@
+from object_detection import RegionClassifier
+import numpy as np
+import cv2
+import os
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import transforms
+
+
+class RegionClassifierTrainer(object):
+    def __init__(self, model_save_path='data/models'):
+        self.model = RegionClassifier()
+        self.train_data = None
+        self.val_data = None
+
+        self.model_save_path = model_save_path
+        self.save_every_n = 10
+
+        # Hyper-parameters.
+        self.batch_size = 128
+        self.n_epochs = 20000
+        self.learning_rate = 3e-4
+        self.val_split = 0.2
+        self.max_transform_sequence = 10
+        self.losses = {'epoch': [], 'ta': [], 'va': [], 'tl': [], 'vl': []}
+        self.best_val_acc = 0
+        self.patience = 10
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.loss_fn = nn.BCELoss()
+
+    def train(self):
+        """
+        Function to train a classifier on hologram regions.
+        :return: None.
+        """
+
+        # Set the PyTorch model to training mode.
+        self.model.train()
+
+        # Doing this lets us access these four variables much faster than if we accessed them through `self` every time.
+        loss_fn = self.loss_fn
+        optimizer = self.optimizer
+        model = self.model
+        train_data = self.train_data
+        patience = self.patience
+
+        best_val_loss = np.inf
+
+        # For each epoch
+        for epoch in range(self.n_epochs + 1):
+            train_acc = 0
+            train_loss = 0
+
+            # Generate batches of augmented training samples.
+            batches = self.generate_batches(train_data)
+            for batch in batches:
+                samples, labels = batch
+                # Use the model to predict the labels for each sample.
+                predictions = model.forward(samples)
+
+                # Compute the loss and take one step along the gradient.
+                optimizer.zero_grad()
+                loss = loss_fn(predictions, labels)
+                loss.backward()
+                optimizer.step()
+
+                train_acc += self.compute_accuracy(labels, predictions)
+                train_loss += loss.detach().item()
+
+            # Report training loss, training accuracy, validation loss, and validation accuracy.
+            train_loss /= len(batches)
+            train_acc /= len(batches)
+            val_loss, val_acc = self.validate()
+
+            self.losses['ta'].append(train_acc)
+            self.losses['va'].append(val_acc)
+            self.losses['tl'].append(train_loss)
+            self.losses['vl'].append(val_loss)
+            self.losses['epoch'].append(epoch)
+
+            print(
+                'EPOCH {}\nTRAIN_LOSS: {:7.4f}\nTRAIN_ACC: {:7.4f}\nVAL_LOSS: {:7.4f}\nVAL_ACC: {:7.4f}\n'.format(
+                    epoch, train_loss, train_acc, val_loss, val_acc
+                )
+            )
+
+            # If enough epochs have passed that we need to save the model, do so.
+            if val_acc > self.best_val_acc:
+                print('NEW BEST ACCURACY', val_acc, epoch)
+                self.best_val_acc = val_acc
+                self.save_model(epoch)
+
+            if val_loss > best_val_loss:
+                patience -= 1
+            else:
+                best_val_loss = val_loss
+                patience = self.patience
+            if patience == 0 and epoch > 200:
+                break
+
+            if epoch % self.save_every_n == 0:
+                self.save_model(epoch)
+
+    def generate_batches(self, data):
+        """
+        Function to split a dataset into random augmented batches.
+
+        :param data: Array of samples to choose from. Either `self.train_data` or `self.val_data`
+        :return: Batches of augmented samples and the appropriate labels.
+        """
+
+        batches = []
+        transform_prob = 0.2
+
+        # Shuffle the indices at which we will access the dataset.
+        indices = [i for i in range(len(data))]
+        np.random.shuffle(indices)
+
+        bs = self.batch_size
+        for i in range(len(data) // bs):
+            # Choose our random batch.
+            idxs = indices[i * bs : i * bs + bs]
+            batch = data[idxs]
+
+            samples = []
+            labels = []
+
+            # For each sample in the selected batch.
+            for training_sample in batch:
+                # Append the augmented sample to the batch.
+                samples.append(training_sample[0])
+
+                # Append the appropriate binary label for this sample to the batch.
+                label = (1, 0) if training_sample[1] == 0 else (0, 1)
+                labels.append(label)
+
+            # Cast batch to tensor for PyTorch.
+            samples = torch.as_tensor(samples, dtype=torch.float32)
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.GaussianBlur(
+                    kernel_size=np.random.choice([2 * i + 1 for i in range(10)])
+                )
+                samples = tf(samples)
+
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.RandomRotation(degrees=np.random.randint(0, 365))
+                samples = tf(samples)
+
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.RandomHorizontalFlip()
+                samples = tf(samples)
+
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.RandomVerticalFlip()
+                samples = tf(samples)
+
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.RandomAutocontrast()
+                samples = tf(samples)
+
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.RandomAdjustSharpness(
+                    sharpness_factor=np.random.uniform(0, 10)
+                )
+                samples = tf(samples)
+
+            if np.random.uniform(0, 1) < transform_prob:
+                tf = transforms.RandomInvert()
+                samples = tf(samples)
+
+            labels = torch.as_tensor(labels, dtype=torch.float32)
+
+            batches.append((samples, labels))
+
+        # Return augmented batch.
+        return batches
+
+    @torch.no_grad()
+    def validate(self):
+        """
+        Function to compute the validation loss and accuracy on a random batch of validation data.
+        :return: Computed loss and accuracy.
+        """
+
+        # Set the model to evaluation mode.
+        self.model.eval()
+
+        # Generate a random augmented batch of validation data.
+        # samples, labels = self.generate_batch(self.val_data)
+
+        samples, labels = self.val_data
+
+        # Compute loss and accuracy of model on the generated batch.
+        predictions = self.model.forward(samples)
+        loss = self.loss_fn(predictions, labels).item()
+        acc = self.compute_accuracy(labels, predictions)
+
+        # Set the model back to training mode.
+        self.model.train()
+
+        # Return the computed loss and accuracy values.
+        return loss, acc
+
+    @torch.no_grad()
+    def compute_accuracy(self, labels, predictions):
+        """
+        Function to compute the accuracy of a batch of predictions given a batch of labels.
+        :param labels: Ground-truth labels to compare to.
+        :param predictions: Predicted labels from the model.
+        :return: Computed accuracy.
+        """
+
+        predicted_labels = predictions.argmax(dim=-1)
+        known_labels = labels.argmax(dim=-1)
+        n_samples = labels.shape[0]
+
+        diff = (predicted_labels - known_labels).abs().sum()
+        acc = 100 * (n_samples - diff) / n_samples
+        return acc.item()
+
+    def load_data(self, folder_path):
+        """
+        Function to load all positive and negative samples given a folder. This assumes there are two folders inside the
+        specified folder, such that the file paths `folder_path/positive` and `folder_path/negative` exist. Positive
+        samples will be loaded from `folder_path/positive` and negative samples from `folder_path/negative`. The
+        resulting data will be split into a training set and validation set for training.
+
+        :param folder_path: Folder to load from.
+        :return: None
+        """
+
+        positive_sample_folder = os.path.join(folder_path, 'positive')
+        negative_sample_folder = os.path.join(folder_path, 'negative')
+        data = []
+
+        # For each image in the positive samples folder.
+        for file_name in os.listdir(positive_sample_folder):
+            if not file_name.endswith('.png'):
+                continue
+
+            # Load region.
+            region = cv2.imread(
+                os.path.join(positive_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+            )
+            label = 1
+
+            # Append region and positive label to dataset.
+            data.append([region.reshape(1, *region.shape), label])
+
+        n_positive = len(data)
+        print('Loaded {} positive training samples.'.format(n_positive))
+
+        # For each image in the negative samples folder.
+        for file_name in os.listdir(negative_sample_folder):
+            if not file_name.endswith('.png'):
+                continue
+
+            # Load region.
+            region = cv2.imread(
+                os.path.join(negative_sample_folder, file_name), cv2.IMREAD_ANYDEPTH
+            )
+            label = 0
+            # Append region and negative label to dataset.
+            data.append([region.reshape(1, *region.shape), label])
+
+        print('Loaded {} negative training samples.'.format(len(data) - n_positive))
+
+        # Randomly shuffle all loaded samples.
+        np.random.shuffle(data)
+
+        # Split resulting dataset into training and validation sets.
+        split = int(round(len(data) * self.val_split))
+        self.train_data = np.asarray(data[split:])
+        val_data = np.asarray(data[:split])
+
+        v_labels = []
+        v_regions = []
+        for region, label in val_data:
+            v_labels.append((1, 0) if label == 0 else (0, 1))
+            v_regions.append(region)
+        self.val_data = (
+            torch.as_tensor(v_regions, dtype=torch.float32),
+            torch.as_tensor(v_labels, dtype=torch.float32),
+        )
+
+    def save_model(self, epoch):
+        """
+        Function to save the parameters of a model during training. Models will be named `model_{epoch}.pt` and saved
+        in the folder `self._model_save_path`
+        :param epoch: Current training epoch.
+        :return: None.
+        """
+
+        path = self.model_save_path
+        model_save_file = os.path.join(path, 'model_{}.pt'.format(epoch))
+        train_csv_path = 'data/region_training_losses.csv'
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        torch.save(self.model.state_dict(), model_save_file)
+        with open(train_csv_path, 'w') as f:
+            ls = self.losses
+            f.write(
+                'Epoch,Training Accuracy,Validation Accuracy,Training Loss,Validation Loss\n'
+            )
+            for i in range(epoch):
+                f.write(
+                    '{},{},{},{},{}\n'.format(
+                        ls['epoch'][i], ls['ta'][i], ls['va'][i], ls['tl'][i], ls['vl'][i],
+                    )
+                )
