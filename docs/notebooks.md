@@ -6,12 +6,12 @@ These notebooks are ordered (1) onwards in the intended order to reproducibly tr
 
 Notebooks that are marked **OPTIONAL** are notebooks that were used to initialize the study (such as, determining MSER parameters or using MSER to crop out particles from the raw assay images to initialize making a dataset)
 
-These notebooks are not necessary to reproduce the results of the work but nevertheless are included for completeness.
+These notebooks are not necessary to reproduce the results of the work because their outputs are included in the repository but nevertheless are included for completeness.
 
 | Notebook     | Download |
 | ----------- | ----------- |
-| (1/OPTIONAL) optimize_MSER_control_panel.ipynb     | [Download](FILL)       |
-| (2/OPTIONAL) classify_regions_with_MSER.ipynb      | [Download](FILL)       |
+| (1/**OPTIONAL**) optimize_MSER_control_panel.ipynb     | [Download](FILL)       |
+| (2/**OPTIONAL**) classify_regions_with_MSER.ipynb      | [Download](FILL)       |
 | (3) bayesian_optimize_region_classifier.ipynb   | [Download](FILL)        |
 | (4) bayesian_optimize_particle_classifier.ipynb   | [Download](FILL)        |
 | (5) train_region_classifier.ipynb   | [Download](FILL)        |
