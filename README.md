@@ -1,4 +1,4 @@
-![](docs/assets/FILL.png)
+![](docs/assets/multiplex_workflow_overview.png)
 
 **High-throughput, Multiplexed Assay Platform for Integrated Analysis of Sepsis**
 ___
