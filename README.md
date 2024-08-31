@@ -1,6 +1,6 @@
 ![](docs/assets/FILL.png)
 
-**High-throughput, Multiplexed Assay Platform for Integrated Analysis of Sepsis*
+**High-throughput, Multiplexed Assay Platform for Integrated Analysis of Sepsis**
 ___
 FILL
 ___
