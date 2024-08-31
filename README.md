@@ -26,7 +26,7 @@ ___
 
 # Acknowledgements
 <p align="top">
-    <img src="docs/assets/nsf-logo.png" width="20%">
+    <img src="docs/assets/nsf_logo.png" width="20%">
     &nbsp; &nbsp;
 </p>
 
