@@ -24,6 +24,7 @@ ___
 ___
 
 # Environment Installation
+Instructions are given below to reproducibly make the Anaconda environment used to run the notebooks/underlying library of this work:
 
 FILL
 ___
