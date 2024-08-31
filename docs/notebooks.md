@@ -11,12 +11,12 @@ These notebooks are not necessary to reproduce the results of the work because t
 | Notebook     | Download |
 | ----------- | ----------- |
 | (1/**OPTIONAL**) optimize_MSER_control_panel.ipynb     | [Download](/training_notebooks/optimize_MSER_control_panel.ipynb)       |
-| (2/**OPTIONAL**) classify_regions_with_MSER.ipynb      | [Download](FILL)       |
-| (3) bayesian_optimize_region_classifier.ipynb   | [Download](FILL)        |
-| (4) bayesian_optimize_particle_classifier.ipynb   | [Download](FILL)        |
-| (5) train_region_classifier.ipynb   | [Download](FILL)        |
-| (6) train_particle_classifier.ipynb   | [Download](FILL)        |
-| (7) train_region_classifier_NoKFold.ipynb   | [Download](FILL)        |
-| (8) train_particle_classifier_NoKFold.ipynb   | [Download](FILL)        |
+| (2/**OPTIONAL**) classify_regions_with_MSER.ipynb      | [Download](/training_notebooks/classify_regions_with_MSER.ipynb)       |
+| (3) bayesian_optimize_region_classifier.ipynb   | [Download](/training_notebooks/bayesian_optimize_region_classifier.ipynb)        |
+| (4) bayesian_optimize_particle_classifier.ipynb   | [Download](/training_notebooks/bayesian_optimize_particle_classifier.ipynb)        |
+| (5) train_region_classifier.ipynb   | [Download](/training_notebooks/train_region_classifier.ipynb)        |
+| (6) train_particle_classifier.ipynb   | [Download](/training_notebooks/train_particle_classifier.ipynb)        |
+| (7) train_region_classifier_NoKFold.ipynb   | [Download](/training_notebooks/train_region_classifier_NoKFold.ipynb)        |
+| (8) train_particle_classifier_NoKFold.ipynb   | [Download](/training_notebooks/train_particle_classifier_NoKFold.ipynb)        |
 
 CAMERON TO-DO: FILL A BRIEF DESCRIPTION OF EACH NOTEBOOK PURPOSE BELOW:
