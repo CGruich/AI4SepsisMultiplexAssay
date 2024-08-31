@@ -10,8 +10,8 @@ These notebooks are not necessary to reproduce the results of the work but never
 
 | Notebook     | Download |
 | ----------- | ----------- |
-| (1/OPTIONAL) optimize_      | [Download](FILL)       |
-| (2/OPTIONAL) Particle Classifier Global Dataset      | [Download](FILL)       |
+| (1/OPTIONAL) optimize_MSER_control_panel.ipynb     | [Download](FILL)       |
+| (2/OPTIONAL) classify_regions_with_MSER.ipynb      | [Download](FILL)       |
 | (3) bayesian_optimize_region_classifier.ipynb   | [Download](FILL)        |
 | (4) bayesian_optimize_particle_classifier.ipynb   | [Download](FILL)        |
 | (5) train_region_classifier.ipynb   | [Download](FILL)        |
@@ -19,4 +19,4 @@ These notebooks are not necessary to reproduce the results of the work but never
 | (7) train_region_classifier_NoKFold.ipynb   | [Download](FILL)        |
 | (8) train_particle_classifier_NoKFold.ipynb   | [Download](FILL)        |
 
-CAMERON TO-DO: FILL A BRIEF DESCRIPTION OF EACH NOTEBOOK BELOW:
+CAMERON TO-DO: FILL A BRIEF DESCRIPTION OF EACH NOTEBOOK PURPOSE BELOW:
