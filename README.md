@@ -32,12 +32,12 @@ ___
 # Citation
 If you found this work to be helpful, please cite our paper: `FILL`
 
-or our code: [Code DOI](https://doi.org/10.5281/zenodo.17619539)
+or our code:
 ___
 
 # Acknowledgements
 <p align="top">
-    <img src="docs/assets/nsf_logo.png" width="20%">
+    <img src="docs/assets/nsf_logo.png" width="8%">
     &nbsp; &nbsp;
 </p>
 
