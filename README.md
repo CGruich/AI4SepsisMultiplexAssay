@@ -23,12 +23,6 @@ ___
 * [Library](docs/library.md) - A brief description of the underlying code library .py files used to facilitate training in the Jupyter notebooks.
 ___
 
-# Environment Installation
-Instructions are given below to reproducibly make the Anaconda environment used to run the notebooks/underlying library of this work:
-
-FILL
-___
-
 # Citation
 If you found this work to be helpful, please cite our paper: `FILL`
 
